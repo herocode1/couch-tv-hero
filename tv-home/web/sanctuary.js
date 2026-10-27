@@ -140,7 +140,9 @@
     [/fox one/i, "fox-one"], [/telemundo/i, "telemundo"], [/instagram/i, "instagram"], [/protect/i, "unifi-protect"]
   ];
   // the tiles there are in art/ (an app with none keeps its own icon)
-  var TILES = [];
+  var TILES = ["youtube", "youtube-tv", "youtube-music", "netflix", "prime-video", "disney-plus", "hulu", "max",
+    "tubi", "paramount-plus", "apple-tv", "fox-one", "telemundo", "instagram", "unifi-protect", "settings",
+    "app-store", "more-apps"];
   function icon(it) {
     var id = it.kind === "more" ? "more-apps" : ICON_PKG[it.package];
     if (!id) ICON_NAME.some(function (r) { if (r[0].test(it.name || "")) { id = r[1]; return true; } return false; });

@@ -39,7 +39,8 @@
 .theme-sanctuary .qbtn.focus { background: var(--gold); color: #173424; }
 
 .sa-left { position: absolute; left: 6.875rem; top: 4.375rem; width: 62rem; }
-.sa-time { font-family: "Cormorant Garamond", serif; font-weight: 500; font-size: 10.625rem; line-height: 0.9; letter-spacing: -0.04em; }
+.sa-time { font-family: "Cormorant Garamond", serif; font-weight: 500; font-size: 10.625rem; line-height: 0.9; letter-spacing: -0.04em;
+  font-variant-numeric: lining-nums tabular-nums; }
 .sa-date { font-size: 1.875rem; margin-top: 1.125rem; color: var(--ink-2); }
 .sa-season { display: inline-flex; align-items: center; gap: 0.75rem; margin-top: 1.25rem; padding: 0.625rem 1.25rem;
   border: 0.0625rem solid rgba(212, 175, 95, 0.55); border-radius: 2.5rem; font-size: 1.375rem; color: var(--gold); }
@@ -77,6 +78,7 @@
 /* the dock, in gold and glass */
 .theme-sanctuary .grid { background: var(--glass); box-shadow: inset 0 0 0 0.0625rem var(--line), 0 1.5rem 3.75rem rgba(0, 0, 0, 0.35);
   -webkit-backdrop-filter: none; backdrop-filter: none; }
+.theme-sanctuary .app .face.art { overflow: hidden; }
 .theme-sanctuary .app .face.art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .theme-sanctuary .app .face.tool { background: rgba(212, 175, 95, 0.12); }
 .theme-sanctuary .app .face.tool svg { stroke: var(--gold); }
