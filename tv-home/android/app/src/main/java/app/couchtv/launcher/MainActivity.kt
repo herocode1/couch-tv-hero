@@ -89,8 +89,36 @@ class MainActivity : Activity() {
         super.onResume()
         hideSystemBars()
         if (pageReady) js("window.tv && tv.resume()")
-        else if (fallback != null) showHome()
+        else if (fallback != null || web == null) showHome()
         io.execute { warmApps() }
+    }
+
+    // Out of sight (an app is playing), the page sleeps: no clock, no polling, no animation.
+    override fun onStart() {
+        super.onStart()
+        web?.onResume()
+        web?.resumeTimers()
+    }
+
+    override fun onStop() {
+        web?.pauseTimers()
+        web?.onPause()
+        super.onStop()
+    }
+
+    // The TV has little memory. When Android asks for it back while an app is in front, give up the
+    // page (about 250 MB with its renderer); onResume builds it again when HOME comes back.
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND && !hasWindowFocus()) dropPage()
+    }
+
+    private fun dropPage() {
+        val w = web ?: return
+        root.removeView(w)
+        w.destroy()
+        web = null
+        pageReady = false
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -187,10 +215,7 @@ class MainActivity : Activity() {
 
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                 // The page crashed or was killed for memory. Drop it and start again.
-                root.removeView(view)
-                view.destroy()
-                web = null
-                pageReady = false
+                if (view === web) dropPage() else { root.removeView(view); view.destroy() }
                 showHome()
                 return true
             }
@@ -218,6 +243,7 @@ class MainActivity : Activity() {
     private fun showHome() {
         if (!hasBundled) { showFallback(); return }
         val w = web ?: makeWebView().also { web = it; root.addView(it, 0, MATCH) }
+        w.resumeTimers()   // timers are shared by every page, and onStop may have paused them
         loadFailed = false
         pageReady = false
         val tv = prefs.getString("tv", null)
