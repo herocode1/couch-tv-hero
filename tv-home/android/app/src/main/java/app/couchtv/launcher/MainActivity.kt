@@ -254,10 +254,15 @@ class MainActivity : Activity() {
      * plain GET of those two /local/ paths, only to a private address on the home network, and no
      * login: the TV never holds a Home Assistant token. Home Assistant on the home network speaks
      * plain http, which the app otherwise refuses, so this one read goes over its own socket.
+     *
+     * /ha/do/<action> is the one thing the TV can ask of the house: it POSTs {"action": ...} to the
+     * webhook named in home.ha.webhook (on the same address). Home Assistant decides what each action
+     * does, and only runs the safe ones it lists (lock, close, the AC, lights); the TV only names one.
      */
     private fun haFile(name: String): WebResourceResponse {
         val none = { code: Int -> WebResourceResponse("text/plain", "utf-8", code, if (code == 404) "Not found" else "Bad gateway", emptyMap(), ByteArrayInputStream(ByteArray(0))) }
         val ha = haConfig() ?: return none(404)
+        if (name.startsWith("do/")) return haDo(ha, name.removePrefix("do/"))
         val (path, type) = when (name) {
             "feed" -> ha.optString("feed") to "application/json"
             "doorbell" -> ha.optString("doorbell") to "image/jpeg"
@@ -270,6 +275,31 @@ class MainActivity : Activity() {
         val body = try { httpGet(host, port, path) } catch (e: Exception) { null } ?: return none(502)
         return WebResourceResponse(type, if (type.endsWith("json")) "utf-8" else null, 200, "OK",
             mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(body))
+    }
+
+    private fun haDo(ha: JSONObject, action: String): WebResourceResponse {
+        val reply = { code: Int, text: String -> WebResourceResponse("text/plain", "utf-8", code, text,
+            mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(ByteArray(0))) }
+        val hook = ha.optString("webhook")
+        if (!HA_ACTION.matches(action) || !HA_HOOK.matches(hook)) return reply(404, "Not found")
+        val m = HA_URL.matchEntire(ha.optString("url")) ?: return reply(404, "Not found")
+        val host = m.groupValues[1]
+        val port = m.groupValues[2].ifEmpty { "80" }.toInt()
+        val ok = try { httpPost(host, port, hook, JSONObject().put("action", action).toString()) } catch (e: Exception) { false }
+        return if (ok) reply(200, "OK") else reply(502, "Bad gateway")
+    }
+
+    /** HTTP/1.0 POST of a small JSON body; true for any 2xx answer. */
+    private fun httpPost(host: String, port: Int, path: String, json: String): Boolean {
+        java.net.Socket().use { s ->
+            s.connect(java.net.InetSocketAddress(host, port), 3000)
+            s.soTimeout = 5000
+            val body = json.toByteArray(Charsets.UTF_8)
+            s.getOutputStream().write(("POST $path HTTP/1.0\r\nHost: $host:$port\r\nContent-Type: application/json\r\n" +
+                "Content-Length: ${body.size}\r\nConnection: close\r\n\r\n").toByteArray(Charsets.US_ASCII) + body)
+            val status = s.getInputStream().bufferedReader(Charsets.US_ASCII).readLine() ?: return false
+            return status.matches(Regex("HTTP/1\\.[01] 2\\d\\d.*"))
+        }
     }
 
     private fun haConfig(): JSONObject? = try {
@@ -600,6 +630,8 @@ class MainActivity : Activity() {
         private val HA_URL = Regex("http://((?:10\\.\\d{1,3}|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d{1,3}\\.\\d{1,3})(?::(\\d{2,5}))?/?")
         private val HA_PATH = Regex("/local/[A-Za-z0-9._-]{1,80}")
         private const val HA_MAX = 3_000_000
+        private val HA_HOOK = Regex("/api/webhook/[A-Za-z0-9_-]{16,80}")
+        private val HA_ACTION = Regex("[a-z0-9_]{1,40}")
         private const val BUNDLED = "www/tv"   // the built-in copy, in the app's assets
         private const val SLOW_MS = 2_500L
         private const val MATCH_W = ViewGroup.LayoutParams.MATCH_PARENT

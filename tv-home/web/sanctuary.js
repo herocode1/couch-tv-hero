@@ -17,6 +17,9 @@
   var cfg = {}, clock24 = false, native = null, haOn = false;
   var feed = null, lastRing = null, toastTimer = null, pollTimer = null;
   var weather = null;
+  var hi = -1;                // the house tile with the focus, -1 when the focus is elsewhere
+  var panel = null;           // the open tile: { name, ai (chosen action), busy, said }
+  var ACT_ID = /^[a-z0-9_]{1,40}$/;
   var $ = function (id) { return document.getElementById(id); };
   function esc(v) { return String(v == null ? "" : v).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
@@ -177,6 +180,7 @@
       '<div class="sa-arch"><img id="sa-art" alt=""></div>' +
       '<div class="sa-house" id="sa-house"></div>' +
       '<div class="sa-toast" id="sa-toast"><i></i><span>Someone is at the front door</span><b>Press OK for the camera</b></div>' +
+      '<div class="sa-act" id="sa-act"></div>' +
       '<div class="sa-cam" id="sa-cam"><img id="sa-cam-img" alt=""><p id="sa-cam-note"></p></div>';
     document.body.insertBefore(el, document.body.firstChild);
   }
@@ -228,15 +232,25 @@
     el.innerHTML = html;
   }
 
+  function houseTiles() { return haOn && feed && Array.isArray(feed.tiles) ? feed.tiles.slice(0, 5) : []; }
+  // what OK on a tile offers: only the actions Home Assistant listed for it, in its own words
+  function actions(t) {
+    return (Array.isArray(t.actions) ? t.actions : []).filter(function (a) {
+      return a && ACT_ID.test(a.id) && typeof a.label === "string";
+    }).slice(0, 4);
+  }
+
   function drawHouse() {
     var box = $("sa-house");
-    var tiles = feed && Array.isArray(feed.tiles) ? feed.tiles.slice(0, 5) : [];
-    if (!haOn || !tiles.length) { box.innerHTML = ""; return; }
+    var tiles = houseTiles();
+    if (!tiles.length) { box.innerHTML = ""; return; }
     var old = !fresh();
     box.classList.toggle("old", old);
-    box.innerHTML = tiles.map(function (t) {
+    if (hi >= tiles.length) hi = tiles.length - 1;
+    box.innerHTML = tiles.map(function (t, i) {
       var g = GLYPH[t.kind] || GLYPH.home;
-      return '<div class="sa-tile' + (t.ok === true ? " ok" : t.ok === false ? " warn" : "") + '">' +
+      return '<div class="sa-tile' + (t.ok === true ? " ok" : t.ok === false ? " warn" : "") +
+        (i === hi && !old ? " focus" : "") + '">' +
         '<div class="k">' + g + esc(t.name) + '</div><div class="v">' + esc(old ? "…" : t.value) + "</div></div>";
     }).join("") + (old ? '<p class="sa-old">Home Assistant is not answering</p>' : "");
   }
@@ -251,6 +265,7 @@
       feed = j;
       drawTrain();
       drawHouse();
+      if (panel && !panel.busy) drawPanel();
       checkRing();
     }, function () { drawHouse(); })
       .then(function () { pollTimer = setTimeout(poll, POLL_MS); });
@@ -284,12 +299,72 @@
   }
   function closeCam() { $("sa-cam").classList.remove("on"); $("sa-cam-img").removeAttribute("src"); }
 
+  // ---------------- a tile, opened ----------------
+  function houseOK() {
+    var t = houseTiles()[hi];
+    if (!t || !fresh()) return;
+    panel = { name: t.name, ai: 0, busy: false, said: "" };
+    drawPanel();
+    $("sa-act").classList.add("on");
+  }
+  function panelTile() {
+    var tiles = houseTiles();
+    for (var i = 0; i < tiles.length; i++) if (tiles[i].name === panel.name) return tiles[i];
+    return null;
+  }
+  function drawPanel() {
+    var t = panelTile();
+    if (!t) { closePanel(); return; }
+    var acts = actions(t);
+    if (panel.ai >= acts.length) panel.ai = Math.max(0, acts.length - 1);
+    var g = GLYPH[t.kind] || GLYPH.home;
+    $("sa-act").innerHTML = '<div class="sa-act-box"><div class="k">' + g + esc(t.name) + '</div>' +
+      '<div class="v">' + esc(t.value) + "</div>" +
+      (acts.length ? '<div class="sa-act-btns">' + acts.map(function (a, i) {
+        return '<span class="sa-btn' + (i === panel.ai && !panel.busy ? " focus" : "") + '">' + esc(a.label) + "</span>";
+      }).join("") + "</div>" : '<p class="sa-act-none">Nothing to change from the TV</p>') +
+      '<p class="sa-act-note">' + esc(panel.said || "Press BACK to close") + "</p></div>";
+  }
+  function closePanel() { panel = null; $("sa-act").classList.remove("on"); $("sa-act").innerHTML = ""; }
+  function panelOn() { return !!panel; }
+
+  function run() {
+    var t = panelTile(), a = t && actions(t)[panel.ai];
+    if (!a || panel.busy) return;
+    if (a.id === "camera") { closePanel(); openCam(); return; }
+    panel.busy = true; panel.said = "Sending…"; drawPanel();
+    var send = window.MOCK_HA ? Promise.resolve() :
+      fetch(HA + "do/" + a.id, { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(r.status); });
+    send.then(function () {
+      if (!panel) return;
+      panel.busy = false; panel.said = "Done"; drawPanel();
+      setTimeout(function () { if (panel && panel.said === "Done") closePanel(); }, 1500);
+      // Home Assistant writes the feed again when the lock, the garage or the AC changes
+      setTimeout(poll, 2000);
+      setTimeout(poll, 8000);
+    }, function () {
+      if (!panel) return;
+      panel.busy = false; panel.said = "Home Assistant did not answer. Try again in a moment."; drawPanel();
+    });
+  }
+
   // Keys while the doorbell is up. Runs before app.js (capture), so the dock does not move under it,
   // and the OK that opened or closed the picture does not also reach app.js when it comes back up.
   function isOk(e) { return e.key === "Enter" || e.keyCode === 13 || e.keyCode === 23; }
   var swallowUp = false;
   window.addEventListener("keydown", function (e) {
     if (!document.documentElement.classList.contains("theme-sanctuary")) return;
+    if (panelOn()) {
+      if (isOk(e) || /^Arrow/.test(e.key)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (isOk(e)) { swallowUp = true; if (!e.repeat) run(); }
+        else if (!panel.busy && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+          panel.ai = Math.max(0, panel.ai + (e.key === "ArrowLeft" ? -1 : 1));
+          panel.said = ""; drawPanel();
+        }
+      }
+      return;
+    }
     if (camOn()) {
       if (isOk(e) || /^Arrow/.test(e.key)) {
         e.preventDefault(); e.stopImmediatePropagation();
@@ -324,9 +399,23 @@
     // BACK: true when it closed something here
     back: function () {
       if (camOn()) { closeCam(); return true; }
+      if (panelOn()) { closePanel(); return true; }
       if (toastOn()) { toast(false); return true; }
       return false;
     },
+    // the house row, for app.js's focus: how many tiles can take it, which one has it, where they are
+    houseCount: function () { return fresh() ? houseTiles().length : 0; },
+    houseFocus: function (i) { if (i !== hi) { hi = i; drawHouse(); } },
+    houseX: function (i) { var el = $("sa-house").children[i]; if (!el) return 0; var b = el.getBoundingClientRect(); return b.left + b.width / 2; },
+    houseNear: function (x) {
+      var best = 0, bestD = Infinity, els = $("sa-house").children;
+      for (var i = 0; i < Math.min(els.length, houseTiles().length); i++) {
+        var b = els[i].getBoundingClientRect(), d = Math.abs(b.left + b.width / 2 - x);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return best;
+    },
+    houseOK: houseOK,
     // for tests: the calendar on any day
     _season: season, _nextFeast: nextFeast
   };

@@ -50,10 +50,11 @@
         train: { line: "5", stop: "Main St", next: 9.6, after: 29.6, leave_in: 2.6 },
         tiles: [
           { kind: "lock", name: "Front door", value: "Locked", ok: true },
-          { kind: "unlock", name: "Back door", value: "Unlocked", ok: false },
+          { kind: "unlock", name: "Back door", value: "Unlocked", ok: false, actions: [{ id: "lock_back", label: "Lock" }] },
           { kind: "garage", name: "Garage", value: "Closed", ok: true },
-          { kind: "temp", name: "Living room", value: "71° · AC off" },
-          { kind: "bell", name: "Doorbell", value: "All Saints theme" }
+          { kind: "temp", name: "Living room", value: "71° · AC off", actions: [{ id: "ac_on", label: "Turn on" },
+            { id: "ac_down", label: "Cooler" }, { id: "ac_up", label: "Warmer" }] },
+          { kind: "bell", name: "Doorbell", value: "All Saints theme", actions: [{ id: "camera", label: "Show camera" }] }
         ] };
     };
   }

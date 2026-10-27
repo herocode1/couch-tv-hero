@@ -117,7 +117,7 @@ is kept on the TV.
 | `scene_seconds` [20] | How long each scene shows. 5 or more. |
 | `clock` ["12h"] | `12h` (5:30 pm) or `24h` (17:30). |
 | `hide_packages` [none] | Android package names never shown on the home or in More apps, for a maker's own clutter (help apps, file browsers, screen sharing tools). `survey-tv.py` lists every TV app with its package name. For example `["com.example.tvhelp"]`. |
-| `ha` [none] | couch-tv-hero, Sanctuary look only: the house from Home Assistant. See "Home Assistant on the home screen" in `HERO.md`. Left out, the Sanctuary look shows no house tiles, train or doorbell. |
+| `ha` [none] | couch-tv-hero, Sanctuary look only: the house from Home Assistant. See "Home Assistant on the home screen" in `HERO.md`. Left out, the Sanctuary look shows no house tiles, train or doorbell. With `ha.webhook` the tiles can be pressed (lock, close, the AC). |
 | `dock_size` [10] | How many apps sit in the Night dock before Settings and More apps. 1 to 10. Everything else is behind More apps. The phone's Arrange apps keeps to the same number. |
 
 ## Apps on the home

@@ -111,7 +111,7 @@
   // With nobody set up, everything is shown ("both" to the bridge).
   var PEOPLE = [], NOBODY = false, who = null, pi = 0;
   try { who = localStorage.getItem("tvhome.who"); } catch (e) {}
-  var zone = "grid", s = 0, g = 0;   // focus: zone, shelf index, grid index
+  var zone = "grid", s = 0, g = 0, hi = 0;   // focus: zone, shelf index, grid index, house tile
   var shelfEls = [], gridEls = [], gridItems = [];
   var touched = false, expanded = false;
   var retryTimer = null, retryMs = 2500, statusTimer = null;
@@ -918,6 +918,7 @@
 
   // ---------------- focus ----------------
   function clearFocus() {
+    if (SANCT) Sanctuary.houseFocus(-1);
     shelfEls.concat(gridEls, quickEls).forEach(function (el) { if (el) el.classList.remove("focus"); });
     $("people").classList.remove("focus");
     Array.prototype.forEach.call($("people").children, function (el) { el.classList.remove("focus"); });
@@ -936,6 +937,10 @@
   // the switcher shows for two or more people, and only while someone has something on the go
   function peopleOn() { return peopleCount() >= 2 && shelfOn(); }
   function toPeople() { zone = "people"; pi = whoIndex(); }
+  // the Sanctuary look's house tiles, a row of their own between the quick buttons and the dock
+  function houseOn() { return SANCT && Sanctuary.houseCount() > 0; }
+  function toHouse(x) { zone = "house"; hi = Sanctuary.houseNear(x); }
+  function midX(el) { var b = el.getBoundingClientRect(); return b.left + b.width / 2; }
 
   function paintFocus() {
     clearFocus();
@@ -947,6 +952,10 @@
       hero(null);
       $("place").style.visibility = "";
       showPhoto();
+      return;
+    }
+    if (zone === "house" && houseOn()) {
+      Sanctuary.houseFocus(hi);
       return;
     }
     if (zone === "people" && peopleOn()) {
@@ -1009,10 +1018,19 @@
       if (dx < 0 && qi === 0) { if (peopleOn()) toPeople(); }
       else if (dx) qi = Math.max(0, Math.min(nq - 1, qi + dx));
       else if (dy > 0) {
-        if (peopleOn()) toPeople();
+        if (houseOn()) toHouse(midX(quickEls[qi]));
+        else if (peopleOn()) toPeople();
         else if (cards.length) zone = "shelf";
         else { zone = "grid"; g = Math.min(GRID_COLS, gridEls.length) - 1; }
       }
+      paintFocus();
+      return;
+    }
+    if (zone === "house" && !houseOn()) zone = "grid";   // Home Assistant went quiet under the focus
+    if (zone === "house") {
+      if (dx) hi = Math.max(0, Math.min(Sanctuary.houseCount() - 1, hi + dx));
+      else if (dy < 0) { if (hasQuick()) { zone = "quick"; qi = quickVisible().length - 1; } }
+      else if (dy > 0 && gridEls.length) { g = nearestInRow(0, Sanctuary.houseX(hi)); zone = "grid"; }
       paintFocus();
       return;
     }
@@ -1037,7 +1055,8 @@
         var nx = g + dx;
         if (nx >= 0 && nx < gridEls.length && Math.floor(nx / GRID_COLS) === row) g = nx;
       } else if (dy < 0 && row === 0) {
-        if (cards.length) zone = "shelf";
+        if (houseOn() && gridEls[g]) toHouse(midX(gridEls[g]));
+        else if (cards.length) zone = "shelf";
         else if (peopleOn()) toPeople();
         else if (hasQuick()) zone = "quick";   // offline the sleep and picture buttons are hidden
       } else if (dy < 0) {
@@ -1093,6 +1112,7 @@
       return;
     }
     if (zone === "quick") { quickAction(); return; }
+    if (zone === "house") { if (houseOn()) Sanctuary.houseOK(); return; }
     if (zone === "people") {
       if (isHead()) { openPop(); paintFocus(); return; }
       pickWho(PEOPLE[pi].id);
