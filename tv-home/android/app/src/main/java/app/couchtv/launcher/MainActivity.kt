@@ -172,7 +172,10 @@ class MainActivity : Activity() {
             override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): WebResourceResponse? {
                 val u = req.url
                 if (u.scheme != "https") return null
-                if (u.host == HOME_HOST) return homeFile(u.path ?: "")
+                if (u.host == HOME_HOST) {
+                    val path = u.path ?: ""
+                    return if (path.startsWith("/ha/")) haFile(path.removePrefix("/ha/")) else homeFile(path)
+                }
                 if (u.host != "tvos.invalid") return null
                 val pkg = u.lastPathSegment ?: return null
                 val isIcon = u.pathSegments.firstOrNull() == "icon"
@@ -239,6 +242,64 @@ class MainActivity : Activity() {
             WebResourceResponse(type, if (text) "utf-8" else null, assets.open("$BUNDLED/$rel"))
         } catch (e: Exception) {
             notFound()
+        }
+    }
+
+    // ---------------------------------------------------------------- Home Assistant, read only
+
+    /**
+     * The house for the Sanctuary look: two files Home Assistant keeps in its www folder (a small
+     * JSON feed and the doorbell's last snapshot), named in config.json under home.ha. The page asks
+     * for https://home.tvos.invalid/ha/feed or /ha/doorbell and this fetches the file. Only a
+     * plain GET of those two /local/ paths, only to a private address on the home network, and no
+     * login: the TV never holds a Home Assistant token. Home Assistant on the home network speaks
+     * plain http, which the app otherwise refuses, so this one read goes over its own socket.
+     */
+    private fun haFile(name: String): WebResourceResponse {
+        val none = { code: Int -> WebResourceResponse("text/plain", "utf-8", code, if (code == 404) "Not found" else "Bad gateway", emptyMap(), ByteArrayInputStream(ByteArray(0))) }
+        val ha = haConfig() ?: return none(404)
+        val (path, type) = when (name) {
+            "feed" -> ha.optString("feed") to "application/json"
+            "doorbell" -> ha.optString("doorbell") to "image/jpeg"
+            else -> return none(404)
+        }
+        if (!HA_PATH.matches(path) || path.contains("..")) return none(404)
+        val m = HA_URL.matchEntire(ha.optString("url")) ?: return none(404)
+        val host = m.groupValues[1]
+        val port = m.groupValues[2].ifEmpty { "80" }.toInt()
+        val body = try { httpGet(host, port, path) } catch (e: Exception) { null } ?: return none(502)
+        return WebResourceResponse(type, if (type.endsWith("json")) "utf-8" else null, 200, "OK",
+            mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(body))
+    }
+
+    private fun haConfig(): JSONObject? = try {
+        prefs.getString("config", null)?.let { JSONObject(it).optJSONObject("home")?.optJSONObject("ha") }
+    } catch (e: Exception) { null }
+
+    /** HTTP/1.0 GET, body of a 200 only, at most HA_MAX bytes. */
+    private fun httpGet(host: String, port: Int, path: String): ByteArray? {
+        java.net.Socket().use { s ->
+            s.connect(java.net.InetSocketAddress(host, port), 3000)
+            s.soTimeout = 5000
+            s.getOutputStream().write("GET $path HTTP/1.0\r\nHost: $host:$port\r\nConnection: close\r\n\r\n".toByteArray(Charsets.US_ASCII))
+            val all = ByteArrayOutputStream()
+            val buf = ByteArray(16384)
+            val input = s.getInputStream()
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                all.write(buf, 0, n)
+                if (all.size() > HA_MAX) return null
+            }
+            val raw = all.toByteArray()
+            var end = -1
+            for (i in 0 until raw.size - 3) {
+                if (raw[i] == '\r'.code.toByte() && raw[i + 1] == '\n'.code.toByte() && raw[i + 2] == '\r'.code.toByte() && raw[i + 3] == '\n'.code.toByte()) { end = i; break }
+            }
+            if (end < 0) return null
+            val status = String(raw, 0, end, Charsets.US_ASCII).lineSequence().first()
+            if (!status.matches(Regex("HTTP/1\\.[01] 200 .*"))) return null
+            return raw.copyOfRange(end + 4, raw.size)
         }
     }
 
@@ -534,6 +595,11 @@ class MainActivity : Activity() {
         // Never resolves on any network (.invalid is reserved): only shouldInterceptRequest answers it.
         private const val HOME_HOST = "home.tvos.invalid"
         private val TV_ID = Regex("[a-z-]{1,32}")
+        // Home Assistant (home.ha in config.json): a private IPv4 address only, and only files in
+        // its www folder, so a bad setting cannot point the TV anywhere else.
+        private val HA_URL = Regex("http://((?:10\\.\\d{1,3}|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d{1,3}\\.\\d{1,3})(?::(\\d{2,5}))?/?")
+        private val HA_PATH = Regex("/local/[A-Za-z0-9._-]{1,80}")
+        private const val HA_MAX = 3_000_000
         private const val BUNDLED = "www/tv"   // the built-in copy, in the app's assets
         private const val SLOW_MS = 2_500L
         private const val MATCH_W = ViewGroup.LayoutParams.MATCH_PARENT

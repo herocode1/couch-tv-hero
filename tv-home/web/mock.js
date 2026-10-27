@@ -12,6 +12,8 @@
 //   newapp=1            an app turns up that this TV has not seen before (the New dot)
 //   down                the bridge is not answering      offline=1   the saved copy, no bridge at all
 //   reset=1             forget everything this preview saved (orders, people, the look)
+//   ha=1                look=sanctuary with a pretend Home Assistant feed (train, doors)
+//   ring=1              ...and the doorbell has just rung
 (function () {
   var q = location.search;
   var arg = function (name) { var m = q.match(new RegExp("[?&]" + name + "=([^&]*)")); return m ? decodeURIComponent(m[1]) : null; };
@@ -41,6 +43,20 @@
   if (arg("scenes")) cfg.home.scenes = arg("scenes").split(",");
   if (arg("secs")) cfg.home.scene_seconds = parseInt(arg("secs"), 10);
   window.COUCH_CONFIG = cfg;
+  if (arg("ha")) {
+    var now = function () { return Math.floor(Date.now() / 1000); }, t0 = now();
+    window.MOCK_HA = function () {
+      return { updated: now(), doorbell: { last: arg("ring") ? t0 - 5 : t0 - 3600 },
+        train: { line: "5", stop: "Main St", next: 9.6, after: 29.6, leave_in: 2.6 },
+        tiles: [
+          { kind: "lock", name: "Front door", value: "Locked", ok: true },
+          { kind: "unlock", name: "Back door", value: "Unlocked", ok: false },
+          { kind: "garage", name: "Garage", value: "Closed", ok: true },
+          { kind: "temp", name: "Living room", value: "71° · AC off" },
+          { kind: "bell", name: "Doorbell", value: "All Saints theme" }
+        ] };
+    };
+  }
 
   // ---------- the TV's apps ----------
   var apps = [

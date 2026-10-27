@@ -1,0 +1,102 @@
+/* The Sanctuary look (sanctuary.js): green and gold, the season's stained-glass window, the house
+   from Home Assistant. Only applies with html.theme-sanctuary, on top of the Night look's dock.
+   Designed at 1920x1080 like app.css: 1rem = 16px at that width. */
+
+@font-face {
+  font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: normal; font-display: block;
+  src: url(fonts/cormorant-garamond-latin-wght-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: italic; font-display: block;
+  src: url(fonts/cormorant-garamond-latin-wght-italic.woff2) format("woff2");
+}
+
+.sanct { display: none; }
+.theme-sanctuary {
+  --gold: #d4af5f;
+  --ink: #f4ecd8;
+  --ink-2: #e9dfc4;
+  --glass: rgba(12, 29, 20, 0.66);
+  --line: rgba(212, 175, 95, 0.3);
+  --ground: radial-gradient(ellipse at 75% 15%, #2f5a3e 0%, #173424 45%, #0c1d14 100%);
+  --dot: #3f8f5a;
+}
+/* the colour of the day: Advent and Lent violet, Christmas and Easter white and gold, Pentecost red */
+.theme-sanctuary.tone-violet { --ground: radial-gradient(ellipse at 75% 15%, #4a2f5e 0%, #2a1a3a 45%, #140c1e 100%); --glass: rgba(24, 14, 34, 0.66); --dot: #8a5bb5; }
+.theme-sanctuary.tone-white { --ground: radial-gradient(ellipse at 75% 15%, #5a4a2a 0%, #2e2614 45%, #15110a 100%); --glass: rgba(30, 24, 12, 0.66); --dot: #f4ecd8; }
+.theme-sanctuary.tone-red { --ground: radial-gradient(ellipse at 75% 15%, #6a2420 0%, #3a1210 45%, #1c0807 100%); --glass: rgba(36, 12, 10, 0.66); --dot: #d9483b; }
+
+.theme-sanctuary, .theme-sanctuary body { background: #0c1d14; }
+.theme-sanctuary .sanct { display: block; position: fixed; inset: 0; background: var(--ground); color: var(--ink); pointer-events: none; }
+/* app.js's own top half and the Keep watching row stay out of this look */
+.theme-sanctuary .scenes, .theme-sanctuary .bg, .theme-sanctuary .scrim, .theme-sanctuary .shelf,
+.theme-sanctuary .hero, .theme-sanctuary .time, .theme-sanctuary .date, .theme-sanctuary .place { display: none !important; }
+/* the quick buttons, small, in the top right corner */
+.theme-sanctuary .top { position: fixed; top: 1.5rem; right: 2.5rem; left: auto; z-index: 2; }
+.theme-sanctuary .qbtn { min-width: 3.75rem; height: 3.75rem; padding: 0 1.25rem; border-radius: 1.875rem; color: var(--ink-2);
+  background: var(--glass); box-shadow: inset 0 0 0 0.0625rem var(--line); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.theme-sanctuary .qbtn svg { width: 1.625rem; height: 1.625rem; }
+.theme-sanctuary .qbtn.focus { background: var(--gold); color: #173424; }
+
+.sa-left { position: absolute; left: 6.875rem; top: 4.375rem; width: 62rem; }
+.sa-time { font-family: "Cormorant Garamond", serif; font-weight: 500; font-size: 10.625rem; line-height: 0.9; letter-spacing: -0.04em;
+  font-variant-numeric: lining-nums tabular-nums; }
+.sa-date { font-size: 1.875rem; margin-top: 1.125rem; color: var(--ink-2); }
+.sa-season { display: inline-flex; align-items: center; gap: 0.75rem; margin-top: 1.25rem; padding: 0.625rem 1.25rem;
+  border: 0.0625rem solid rgba(212, 175, 95, 0.55); border-radius: 2.5rem; font-size: 1.375rem; color: var(--gold); }
+.sa-season i { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--dot); box-shadow: 0 0 0 0.1875rem rgba(255, 255, 255, 0.12); }
+.sa-season .sep, .sa-train .sep { opacity: 0.45; margin: 0 0.125rem; }
+.sa-wx { margin-top: 1.375rem; font-size: 1.625rem; color: var(--ink-2); min-height: 2rem; }
+.sa-train { display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; font-size: 1.375rem; color: var(--ink-2); min-height: 2rem; }
+.sa-train b { color: var(--gold); font-weight: 600; }
+.sa-train .bullet { width: 1.875rem; height: 1.875rem; border-radius: 50%; background: #00933c; color: #fff;
+  font-weight: 700; font-size: 1.0625rem; display: inline-flex; align-items: center; justify-content: center; }
+.sa-train .bullet:empty { display: none; }
+.sa-verse { margin-top: 1.625rem; width: 47.5rem; font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 1.6875rem;
+  line-height: 1.35; color: rgba(244, 236, 216, 0.72); }
+.sa-verse b { display: block; margin-top: 0.5rem; font-family: "Inter", sans-serif; font-style: normal; font-weight: 500;
+  font-size: 0.9375rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
+
+/* the season's window, lit from behind */
+.sa-arch { position: absolute; right: 8.5rem; top: 6rem; width: 25.2rem; height: 28rem; }
+.sa-arch::before { content: ""; position: absolute; inset: 8% 6% 0; border-radius: 50% 50% 0 0;
+  background: radial-gradient(ellipse at 50% 40%, rgba(255, 220, 140, 0.32), rgba(255, 220, 140, 0) 70%); filter: blur(1.5rem); }
+.sa-arch img { position: relative; width: 100%; height: 100%; object-fit: contain; }
+
+/* the house: up to five tiles from Home Assistant */
+.sa-house { position: absolute; left: 6.875rem; right: 5.625rem; top: 38rem; display: flex; gap: 1.25rem; }
+.sa-tile { flex: 1; height: 7rem; border-radius: 1.375rem; background: var(--glass); box-shadow: inset 0 0 0 0.0625rem var(--line);
+  padding: 1rem 1.375rem; display: flex; flex-direction: column; justify-content: space-between; }
+.sa-tile .k { display: flex; gap: 0.625rem; align-items: center; font-size: 1.0625rem; color: rgba(244, 236, 216, 0.7); }
+.sa-tile .k svg { width: 1.5rem; height: 1.5rem; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sa-tile .v { font-size: 1.625rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-tile.ok .v { color: #8fd6a5; }
+.sa-tile.warn .v { color: #ffc46b; }
+.sa-house.old .sa-tile { opacity: 0.5; }
+.sa-old { position: absolute; left: 0; top: 100%; margin-top: 0.5rem; font-size: 1rem; color: rgba(244, 236, 216, 0.5); }
+
+/* the dock, in gold and glass */
+.theme-sanctuary .grid { background: var(--glass); box-shadow: inset 0 0 0 0.0625rem var(--line), 0 1.5rem 3.75rem rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: none; backdrop-filter: none; }
+.theme-sanctuary .app .face.art { overflow: hidden; }
+.theme-sanctuary .app .face.art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.theme-sanctuary .app .face.tool { background: rgba(212, 175, 95, 0.12); }
+.theme-sanctuary .app .face.tool svg { stroke: var(--gold); }
+.theme-sanctuary .app.focus .face { box-shadow: 0 0 0 0.25rem var(--gold), 0 1.125rem 2.5rem rgba(0, 0, 0, 0.45); }
+.theme-sanctuary .app .label { color: var(--ink-2); }
+
+/* someone at the door */
+.sa-toast { position: absolute; left: 50%; top: 1.625rem; transform: translate(-50%, -8rem); display: flex; gap: 1rem; align-items: center;
+  padding: 0.875rem 1.75rem; border-radius: 2.5rem; background: var(--ink-2); color: #173424; font-size: 1.25rem; font-weight: 600;
+  box-shadow: 0 0.875rem 2.5rem rgba(0, 0, 0, 0.45); transition: transform 500ms var(--ease, ease); z-index: 3; }
+.sa-toast.on { transform: translate(-50%, 0); }
+.sa-toast i { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: #c0392b; animation: sa-blink 1s infinite; }
+.sa-toast b { font-weight: 500; opacity: 0.7; }
+@keyframes sa-blink { 50% { opacity: 0.2; } }
+.sa-cam { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 1.25rem;
+  background: rgba(6, 12, 9, 0.92); z-index: 4; }
+.sa-cam.on { display: flex; }
+.sa-cam img { max-width: 80%; max-height: 80%; border-radius: 1.25rem; box-shadow: 0 0 0 0.1875rem var(--gold); }
+.sa-cam p { font-size: 1.375rem; color: var(--ink-2); }
+/* no Keep watching here, so no profile switch either */
+.theme-sanctuary .top-left { display: none; }
