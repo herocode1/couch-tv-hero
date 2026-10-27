@@ -27,7 +27,9 @@
   var WXCFG = { lat: -33.8688, lon: 151.2093, place: "Sydney", timezone: "Australia/Sydney" };
   var QUICK_ALL = ["sleep", "picture", "look", "input"];
   // The look: ?theme= for a preview, then what the Look button last chose on this TV, then home.look.
-  var THEME = "night", NIGHT = true, CLOCK24 = false;
+  // SANCT: the Sanctuary look (sanctuary.js), which keeps Night's dock and draws its own top half.
+  var THEME = "night", NIGHT = true, SANCT = false, CLOCK24 = false;
+  var LOOKS = ["sanctuary", "night", "classic"];
 
   // What this TV keeps for itself (app order, people order, new apps, the look). Written to the
   // page's storage and to the launcher (TVOS.keep), so the live page and the saved copy share it.
@@ -143,9 +145,12 @@
     // no "quick" from an older bridge: the sleep timer, and the picture switch where the TV has one
     QUICK = (TVCFG.quick || ["sleep", "picture"]).filter(function (q, i, a) { return QUICK_ALL.indexOf(q) >= 0 && a.indexOf(q) === i; });
     THEME = (Q.match(/[?&]theme=([a-z]+)/) || [])[1] || kept("tvhome.look") || HOME.look || "night";
-    if (THEME !== "classic") THEME = "night";
-    NIGHT = THEME === "night";
+    if (LOOKS.indexOf(THEME) < 0) THEME = "night";
+    SANCT = THEME === "sanctuary" && !!window.Sanctuary;
+    if (THEME === "sanctuary" && !SANCT) THEME = "night";
+    NIGHT = THEME !== "classic";
     document.documentElement.classList.toggle("theme-night", NIGHT);
+    document.documentElement.classList.toggle("theme-sanctuary", SANCT);
     GRID_COLS = NIGHT ? 12 : 8;
     DOCK_APPS = Math.max(1, Math.min(10, parseInt(HOME.dock_size, 10) || 10));
     CLOCK24 = HOME.clock === "24h";
@@ -276,7 +281,7 @@
     var w = NIGHT && data.weather && data.weather.temp != null ? data.weather : null;
     $("date").innerHTML = esc(day) + (w ? '<span class="wx">' + wxIcon(w) + esc(w.temp + "° " + w.text) + "</span>" : "");
     document.body.classList.toggle("night", h >= 21 || h < 6);
-    if (NIGHT) glassClock(hm);
+    if (NIGHT && !SANCT) glassClock(hm);
     if (quickReady) renderQuick();
   }
 
@@ -378,8 +383,8 @@
 
   function refreshWeather() {
     if (!NIGHT) return Promise.resolve();
-    if (OFFLINE) return weatherDirect().then(function (j) { data.weather = j; clock(); }, function () {});
-    return api("GET", "/api/weather").then(function (j) { data.weather = j; clock(); }, function () {});
+    if (OFFLINE) return weatherDirect().then(function (j) { data.weather = j; clock(); if (SANCT) Sanctuary.weather(j); }, function () {});
+    return api("GET", "/api/weather").then(function (j) { data.weather = j; clock(); if (SANCT) Sanctuary.weather(j); }, function () {});
   }
 
   // Offline: the same Open-Meteo call the bridge makes (free, no key), for the place in config.json.
@@ -389,10 +394,15 @@
     95: "Storms", 96: "Storms", 99: "Storms" };
   function weatherDirect() {
     var url = "https://api.open-meteo.com/v1/forecast?latitude=" + WXCFG.lat + "&longitude=" + WXCFG.lon +
-      "&current=temperature_2m,weather_code,is_day&timezone=" + encodeURIComponent(WXCFG.timezone || "auto") + "&forecast_days=1";
+      "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min" +
+      (WXCFG.unit === "f" ? "&temperature_unit=fahrenheit" : "") +
+      "&timezone=" + encodeURIComponent(WXCFG.timezone || "auto") + "&forecast_days=1";
     return fetch(url).then(function (r) { return r.json(); }).then(function (j) {
       var c = j.current, code = Math.round(c.weather_code);
-      return { temp: Math.round(c.temperature_2m), code: code, text: WMO_TEXT[code] || "", is_day: !!c.is_day };
+      var d = j.daily || {};
+      return { temp: Math.round(c.temperature_2m), code: code, text: WMO_TEXT[code] || "", is_day: !!c.is_day,
+        high: d.temperature_2m_max ? Math.round(d.temperature_2m_max[0]) : null,
+        low: d.temperature_2m_min ? Math.round(d.temperature_2m_min[0]) : null };
     });
   }
 
@@ -464,7 +474,7 @@
         el.innerHTML = ICONS.picture + "<span>" + esc(picLabel()) + "</span>";
         el.classList.toggle("off", !picCanSet);
       } else if (q === "look") {
-        el.innerHTML = ICONS.look + "<span>" + (NIGHT ? "Classic look" : "Night look") + "</span>";
+        el.innerHTML = ICONS.look + "<span>" + (SANCT ? "Night look" : NIGHT ? "Classic look" : window.Sanctuary ? "Sanctuary look" : "Night look") + "</span>";
       } else if (q === "input") {
         el.innerHTML = ICONS.input + "<span>Input</span>";
       }
@@ -508,9 +518,10 @@
       .catch(function (e) { note(e.message); })
       .then(function () { picBusy = false; renderQuick(); });
   }
-  // The look is kept on this TV; the page starts again in the other look.
+  // The look is kept on this TV; the page starts again in the next look.
   function toggleLook() {
-    keep("tvhome.look", NIGHT ? "classic" : "night");
+    var looks = window.Sanctuary ? LOOKS : ["night", "classic"];
+    keep("tvhome.look", looks[(looks.indexOf(THEME) + 1) % looks.length]);
     location.replace(location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, ""));
   }
   // The TV's own input list (HDMI, a console, a set top box): the TV_INPUT key through the bridge,
@@ -626,12 +637,13 @@
   function renderShelf() {
     var track = $("shelf");
     data.shows = data.showsBy[who] || [];
-    var anyone = PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
+    // Sanctuary has no Keep watching row: the house and the season have that space
+    var anyone = !SANCT && PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
     // nobody has anything on the go: no empty box, the photo has the space
     $("shelf-section").classList.toggle("empty", !anyone);
     $("people").classList.toggle("empty", !anyone);
     renderPeople();
-    if (!data.shows.length) {
+    if (!data.shows.length || SANCT) {
       var name = PEOPLE[whoIndex()].name;
       track.innerHTML = '<p class="shelf-none">' + (peopleCount() < 2 ? "Nothing on the go yet." : "Nothing on the go for " + esc(name) + " yet.") + "</p>";
       shelfEls = [];
@@ -861,8 +873,9 @@
   }
 
   function dockHTML(it) {
-    var face;
-    if (it.kind === "screen") face = '<div class="face tool">' + ICONS.screen + "</div>";
+    var face, art = SANCT && it.kind !== "screen" ? Sanctuary.icon(it) : null;
+    if (art) face = '<div class="face art"><img src="' + esc(art) + '" alt=""></div>';
+    else if (it.kind === "screen") face = '<div class="face tool">' + ICONS.screen + "</div>";
     else if (it.kind === "more") face = '<div class="face tool">' + ICONS.more + "</div>";
     else if (it.package === SETTINGS_PKG) face = '<div class="face tool">' + ICONS.gear + "</div>";
     else if (iconUrl(it.package)) face = '<div class="face"><img src="' + esc(iconUrl(it.package)) + '" alt="" decoding="async"></div>';
@@ -1270,15 +1283,21 @@
 
   // the native side calls these
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
-  window.tv = { back: goHome, home: function () { goHome(); refresh(); },
-    resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); } };
+  // Sanctuary gets BACK first, to close the doorbell picture.
+  window.tv = { back: function () { if (!(SANCT && Sanctuary.back())) goHome(); },
+    home: function () { if (SANCT) Sanctuary.back(); goHome(); refresh(); },
+    resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); if (SANCT) Sanctuary.resume(); } };
 
   function start() {
     readConfig();
     mark("app-start");
     clock();
     setInterval(clock, 15000);
-    if (NIGHT) {
+    if (SANCT) {
+      Sanctuary.start({ config: CFG, clock24: CLOCK24, tv: TV });
+      refreshWeather();
+      setInterval(refreshWeather, 30 * 60000);
+    } else if (NIGHT) {
       buildScenes();
       // ?scene=fog starts on that scene, for previews
       var first = (Q.match(/[?&]scene=([a-z]+)/) || [])[1];
