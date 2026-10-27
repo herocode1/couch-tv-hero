@@ -99,11 +99,22 @@ Home Assistant writes the feed whenever something on it changes, and every minut
 - `kind` picks the tile's icon: `lock`, `unlock`, `garage`, `temp`, `light`, `bell` or `home`.
 - The house tiles go grey when the feed is more than 10 minutes old.
 
-One way to write it, in `configuration.yaml`:
+One way to write it. Home Assistant runs a `shell_command` that has a template without a shell,
+so pipes and `>` do not work there; a small script does the writing. In
+`/config/scripts/tv_feed.sh` (make it executable with `chmod +x`):
+
+```sh
+#!/bin/sh
+# Writes the TV feed from one base64 argument, through a temporary file so the TV never reads half.
+out=/config/www/<feed file name>.json
+printf '%s' "$1" | base64 -d > "$out.tmp" && mv "$out.tmp" "$out"
+```
+
+And in `configuration.yaml`:
 
 ```yaml
 shell_command:
-  tv_feed: "echo {{ feed }} | base64 -d > /config/www/<feed file name>.json"
+  tv_feed: "/config/scripts/tv_feed.sh {{ feed }}"
 ```
 
 Then add an automation that calls `shell_command.tv_feed` with
