@@ -1,0 +1,67 @@
+# Builds the TV home app (tv-home/android) on every pull request and push to main.
+# With the signing key in the repo's Actions secrets it also signs the release APK and keeps it as
+# a build artifact; without them it only checks that the app builds. The key never enters the repo.
+#   HERO_KEYSTORE_B64       the keystore file, base64
+#   HERO_KEYSTORE_PASSWORD  its password
+#   HERO_KEY_ALIAS          the key's alias (default: hero)
+name: Build TV home
+
+on:
+  pull_request:
+    paths: ["tv-home/**", "config.example.json", ".github/workflows/build-tv-home.yml"]
+  push:
+    branches: [main]
+    paths: ["tv-home/**", "config.example.json", ".github/workflows/build-tv-home.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # The wrapper jar is a binary in the repo: make sure it is Gradle's own.
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Signing key
+        env:
+          KEY_B64: ${{ secrets.HERO_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEY_B64" ]; then
+            echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/hero.jks"
+            echo "HERO_KEYSTORE=$RUNNER_TEMP/hero.jks" >> "$GITHUB_ENV"
+          else
+            echo "No signing key in this repo's secrets: building an unsigned APK only."
+          fi
+      - name: Build
+        env:
+          HERO_KEYSTORE_PASSWORD: ${{ secrets.HERO_KEYSTORE_PASSWORD }}
+          HERO_KEY_ALIAS: ${{ secrets.HERO_KEY_ALIAS }}
+        run: tv-home/android/gradlew -p tv-home/android --no-daemon assembleRelease "-PconfigJson=$PWD/config.example.json"
+      - name: Check the APK
+        run: |
+          APK=$(ls tv-home/android/app/build/outputs/apk/release/*.apk)
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          "$AAPT" dump permissions "$APK"
+          # Two permissions and no plain HTTP: fail the build if either changes without us noticing.
+          test "$("$AAPT" dump permissions "$APK" | grep -c 'uses-permission')" -eq 2
+          "$AAPT" dump xmltree --file AndroidManifest.xml "$APK" | grep -E 'usesCleartextTraffic.*(=false|=0x0|0x0$)'
+          sha256sum "$APK"
+      - name: Keep the signed APK
+        if: env.HERO_KEYSTORE != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: couch-tv-hero-home
+          path: tv-home/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/hero.jks"

@@ -14,20 +14,29 @@ android {
         minSdk = 28
         targetSdk = 34
         versionCode = 3
-        versionName = "1.2"
-        // Where the bridge might be: ./gradlew assembleRelease -PbridgeUrls=http://my-computer.local:5400
-        // (comma separated, more than one is fine). The last one that answered is remembered on the TV.
-        // Without it, apply.sh tells the app the address when it installs (the "bridge" extra), and
-        // with no address at all (option A) the copy of the home built into the app is the home.
-        val urls = (project.findProperty("bridgeUrls") as String? ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        buildConfigField("String[]", "BRIDGES", "{" + urls.joinToString(", ") { "\"" + it + "\"" } + "}")
+        versionName = "1.2-hero"
+        // couch-tv-hero has no bridge: the home page is always the copy built into the app.
     }
     buildFeatures { buildConfig = true }
+    // Release builds are signed with our own key, never the debug key. The key stays out of the
+    // repo: pass its path and passwords as Gradle properties or environment variables
+    // (HERO_KEYSTORE, HERO_KEYSTORE_PASSWORD, HERO_KEY_ALIAS, HERO_KEY_PASSWORD).
+    fun secret(name: String): String? = (project.findProperty(name) as String?) ?: System.getenv(name)
+    val keystore = secret("HERO_KEYSTORE")
+    signingConfigs {
+        if (keystore != null) create("hero") {
+            storeFile = file(keystore)
+            storePassword = secret("HERO_KEYSTORE_PASSWORD")
+            keyAlias = secret("HERO_KEY_ALIAS") ?: "hero"
+            keyPassword = secret("HERO_KEY_PASSWORD") ?: secret("HERO_KEYSTORE_PASSWORD")
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            // Unset when there is no key: Gradle then builds an unsigned APK that no TV will install.
+            signingConfig = signingConfigs.findByName("hero")
         }
     }
     compileOptions {

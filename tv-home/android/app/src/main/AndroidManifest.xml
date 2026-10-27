@@ -25,7 +25,7 @@
         android:icon="@drawable/icon"
         android:banner="@drawable/banner"
         android:theme="@style/Home"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:supportsRtl="false">
 
         <activity

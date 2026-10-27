@@ -212,7 +212,7 @@
 
   function iconUrl(pkg) {
     if (!pkg) return null;
-    if (TV) return "http://tvos.invalid/icon/" + pkg;
+    if (TV) return "https://tvos.invalid/icon/" + pkg;
     return window.MOCK_ICON ? window.MOCK_ICON(pkg) : null;
   }
 
@@ -1174,7 +1174,7 @@
     try { list = JSON.parse(TV.apps()); } catch (e) { return null; }
     return list.map(function (a) {
       return { kind: "app", name: RENAME[a.package] || a.label, package: a.package,
-        banner: "http://tvos.invalid/banner/" + a.package };   // the launcher makes one when the app has none
+        banner: "https://tvos.invalid/banner/" + a.package };   // the launcher makes one when the app has none
     });
   }
   function sortApps(list) {
