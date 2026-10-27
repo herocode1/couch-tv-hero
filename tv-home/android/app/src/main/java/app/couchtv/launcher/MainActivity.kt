@@ -38,16 +38,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
- * The TV home screen. Shows the page the bridge serves at /tv/ full screen. If the bridge cannot be
- * reached, shows the saved copy of that page (scenes, clock, weather, apps), or the copy built
- * into the app, and keeps trying the bridge. With no bridge at all (option A) the built-in copy is
- * the home. A plain grid of the TV's apps is the last resort, so the TV is never stuck.
+ * The TV home screen. Shows the copy of the home page built into the app (scenes, clock, weather,
+ * apps) full screen. couch-tv-hero has no bridge: the page is never loaded from the network, so no
+ * other device can change what this screen runs. A plain grid of the TV's apps is the last resort,
+ * so the TV is never stuck.
  */
 class MainActivity : Activity() {
 
@@ -61,41 +59,26 @@ class MainActivity : Activity() {
     private var fallback: View? = null
     private var pageReady = false
     private var loadFailed = false
-    private var probing = false
-    private var offline = false   // showing the saved copy because the computer is off
-    private var resumed = false
-    private val retry = Runnable { if (!pageReady || offline) connect() }
 
     private val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Lets a computer inspect the page over ADB (chrome://inspect). Only reachable with ADB access.
-        WebView.setWebContentsDebuggingEnabled(true)
+        // Lets a computer inspect the page over ADB (chrome://inspect). Debug builds only.
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         root = FrameLayout(this).apply { setBackgroundColor(GROUND) }
         setContentView(root)
         hideSystemBars()
         intent?.let { readExtras(it) }
         io.execute { warmApps() }
-        // At power-on the page is often asked for before Wi-Fi is up: try again the moment it is.
-        getSystemService(android.net.ConnectivityManager::class.java)?.registerDefaultNetworkCallback(
-            object : android.net.ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: android.net.Network) {
-                    main.post { if (loadFailed || offline) connect() }
-                }
-            })
-        // Load the last bridge that worked straight away; only probe the others if it fails.
-        val saved = prefs.getString("bridge", null)
-        if (saved != null) showWeb(saved) else connect()
+        showHome()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.hasExtra("bridge") || intent.hasExtra("config_b64")) {
+        if (intent.hasExtra("config_b64") || intent.hasExtra("tv")) {
             readExtras(intent)
-            pageReady = false
-            offline = false
-            connect()
+            showHome()
             return
         }
         // HOME pressed while we are already in front: back to the first tile.
@@ -104,24 +87,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        resumed = true
         hideSystemBars()
-        if (pageReady && offline && alone()) {
-            js("window.tv && tv.resume()")   // option A: the built-in copy is the home, keep it fresh
-        } else if (pageReady && !offline) {
-            js("window.tv && tv.resume()")
-            // the computer may have gone off while the page was open: then the saved copy takes over
-            val base = prefs.getString("bridge", null)
-            if (base != null && hasOffline()) io.execute {
-                if (!reachable(base)) main.post { if (resumed && !offline) { showOffline(); later(OFFLINE_RETRY_MS) } }
-            }
-        } else if (offline || fallback != null) connect()
+        if (pageReady) js("window.tv && tv.resume()")
+        else if (fallback != null) showHome()
         io.execute { warmApps() }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        resumed = false
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -145,90 +114,27 @@ class MainActivity : Activity() {
     }
 
     /**
-     * What apply.sh tells the app: "bridge" (the bridge's address, or "none" for option A, no
-     * computer), "config_b64" (the home's settings from config.json, base64 JSON, for the built-in
-     * copy) and "tv" (which TV this is, for a house with more than one; none = the default TV).
+     * What apply.sh tells the app: "config_b64" (the home's settings from config.json, base64 JSON,
+     * for the built-in copy) and "tv" (which TV this is, for a house with more than one; none = the
+     * default TV). There is no "bridge" extra: the page always comes from inside the app.
      */
     private fun readExtras(i: Intent) {
         val e = prefs.edit()
-        i.getStringExtra("bridge")?.trim()?.let {
-            if (it.isEmpty() || it == "none") e.remove("bridge") else e.putString("bridge", it.trimEnd('/'))
-        }
         i.getStringExtra("config_b64")?.let {
             try {
                 val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                JSONObject(json)   // only keep it if it is real JSON
-                e.putString("config", json)
+                // Only real JSON, and stored as org.json writes it back out: its parser is lenient (it
+                // takes unquoted words), and this text becomes a script, so the raw string never does.
+                e.putString("config", JSONObject(json).toString())
             } catch (x: Exception) {
                 // a broken value keeps the settings the app already had
             }
         }
-        i.getStringExtra("tv")?.let { e.putString("tv", it) }
+        i.getStringExtra("tv")?.takeIf { TV_ID.matches(it) }?.let { e.putString("tv", it) }
         e.apply()
     }
 
-    // ---------------------------------------------------------------- finding the bridge
-
-    /** No bridge anywhere (option A): the built-in copy is the home, and nothing to look for. */
-    private fun alone() = prefs.getString("bridge", null) == null && BuildConfig.BRIDGES.isEmpty()
-
-    private fun connect() {
-        if (probing) return
-        if (alone()) {
-            if (!offline || web == null) showOffline()
-            return
-        }
-        probing = true
-        val saved = prefs.getString("bridge", null)
-        val candidates = (listOfNotNull(saved) + BuildConfig.BRIDGES).distinct()
-        io.execute {
-            val found = candidates.firstOrNull { reachable(it) }
-            main.post {
-                probing = false
-                if (found != null) {
-                    prefs.edit().putString("bridge", found).apply()
-                    // back from the saved copy only while the home is on screen, never during a show
-                    if (offline && !resumed) return@post
-                    showWeb(found)
-                } else if (hasOffline()) {
-                    if (!offline) showOffline()
-                    later(OFFLINE_RETRY_MS)
-                } else {
-                    showFallback()
-                    later(RETRY_MS)
-                }
-            }
-        }
-    }
-
-    private fun later(ms: Long) {
-        main.removeCallbacks(retry)
-        main.postDelayed(retry, ms)
-    }
-
-    private fun reachable(base: String): Boolean = try {
-        val c = URL("$base/api/health").openConnection() as HttpURLConnection
-        c.connectTimeout = 1200
-        c.readTimeout = 1500
-        val ok = c.responseCode in 200..299
-        c.disconnect()
-        ok
-    } catch (e: Exception) {
-        false
-    }
-
     // ---------------------------------------------------------------- the page
-
-    private fun showWeb(base: String) {
-        val w = web ?: makeWebView().also { web = it; root.addView(it, 0, MATCH) }
-        loadFailed = false
-        offline = false
-        pageReady = false
-        val tv = prefs.getString("tv", null)
-        w.loadUrl(if (tv.isNullOrEmpty()) "$base/tv/" else "$base/tv/?tv=$tv")
-        // Never a blank screen: if the page is slow, show the app grid until it arrives.
-        main.postDelayed({ if (!pageReady) showFallback() }, SLOW_MS)
-    }
 
     private fun makeWebView(): WebView = WebView(this).apply {
         setBackgroundColor(GROUND)
@@ -245,13 +151,11 @@ class MainActivity : Activity() {
         addJavascriptInterface(Native(), "TVOS")
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
-                if (!loadFailed && url.startsWith("http")) {
+                if (!loadFailed && url.startsWith("https://$HOME_HOST/")) {
                     pageReady = true
                     removeFallback()
                     view.visibility = View.VISIBLE
                     view.requestFocus()
-                    // the live page is up: bring the saved copy up to date if the page changed
-                    if (!offline) prefs.getString("bridge", null)?.let { b -> io.execute { syncOffline(b) } }
                 }
             }
 
@@ -267,7 +171,8 @@ class MainActivity : Activity() {
 
             override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): WebResourceResponse? {
                 val u = req.url
-                if (u.host == OFFLINE_HOST) return offlineFile(u.path ?: "")
+                if (u.scheme != "https") return null
+                if (u.host == HOME_HOST) return homeFile(u.path ?: "")
                 if (u.host != "tvos.invalid") return null
                 val pkg = u.lastPathSegment ?: return null
                 val isIcon = u.pathSegments.firstOrNull() == "icon"
@@ -283,7 +188,7 @@ class MainActivity : Activity() {
                 view.destroy()
                 web = null
                 pageReady = false
-                connect()
+                showHome()
                 return true
             }
         }
@@ -295,104 +200,46 @@ class MainActivity : Activity() {
         pageReady = false
         web?.visibility = View.INVISIBLE
         web?.stopLoading()
-        if (!offline && hasOffline()) main.post { showOffline() } else showFallback()
-        later(3000)
+        showFallback()
+        main.postDelayed({ if (!pageReady) showHome() }, RETRY_MS)
     }
 
-    // ---------------------------------------------------------------- the saved copy 
-
-    private val offlineDir get() = java.io.File(filesDir, "offline/web")
-
-    private fun hasSynced() = java.io.File(offlineDir, "index.html").isFile
+    // ---------------------------------------------------------------- the built-in copy
 
     /** The copy of the home built into the app (assets/www/tv, from tv-home/web at build time). */
     private val hasBundled by lazy {
         try { assets.list(BUNDLED)?.contains("index.html") == true } catch (e: Exception) { false }
     }
 
-    private fun hasOffline() = hasSynced() || hasBundled
-
-    /** The bridge's latest copy when there is a bridge, else the one built into the app. */
-    private fun useSynced() = !alone() && hasSynced()
-
-    /**
-     * The home page with no computer: the copy last taken from the bridge (option B with the
-     * computer off), or the copy built into the app (option A, or B before the bridge first answered).
-     */
-    private fun showOffline() {
-        if (!hasOffline()) { showFallback(); return }
+    /** The home page, from inside the app. Only HOME_HOST, which shouldInterceptRequest answers. */
+    private fun showHome() {
+        if (!hasBundled) { showFallback(); return }
         val w = web ?: makeWebView().also { web = it; root.addView(it, 0, MATCH) }
         loadFailed = false
-        offline = true
+        pageReady = false
         val tv = prefs.getString("tv", null)
-        w.loadUrl("http://$OFFLINE_HOST/tv/index.html?offline=1" + (if (alone()) "&alone=1" else "") +
-            if (tv.isNullOrEmpty()) "" else "&tv=$tv")
+        w.loadUrl("https://$HOME_HOST/tv/index.html?offline=1&alone=1" + if (tv.isNullOrEmpty()) "" else "&tv=$tv")
+        // Never a blank screen: if the page is slow, show the app grid until it arrives.
+        main.postDelayed({ if (!pageReady) showFallback() }, SLOW_MS)
     }
 
-    /** Copies the bridge's home page files when they changed (the bridge's fingerprint says so). */
-    private fun syncOffline(base: String) {
-        try {
-            val m = JSONObject(fetchText("$base/tv/manifest.json"))
-            val version = m.getString("version")
-            if (version == prefs.getString("offline_version", null) && hasSynced()) return
-            val tmp = java.io.File(filesDir, "offline/new").apply { deleteRecursively(); mkdirs() }
-            val files = m.getJSONArray("files")
-            for (i in 0 until files.length()) {
-                val rel = files.getJSONObject(i).getString("path")
-                if (rel.contains("..")) continue
-                val out = java.io.File(tmp, rel).apply { parentFile?.mkdirs() }
-                val c = URL("$base/tv/$rel").openConnection() as HttpURLConnection
-                c.connectTimeout = 3000
-                c.readTimeout = 15000
-                try {
-                    if (c.responseCode !in 200..299) return   // half a copy is no copy: keep the old one
-                    c.inputStream.use { inp -> out.outputStream().use { inp.copyTo(it) } }
-                } finally {
-                    c.disconnect()
-                }
-            }
-            offlineDir.deleteRecursively()
-            if (tmp.renameTo(offlineDir)) prefs.edit().putString("offline_version", version).apply()
-        } catch (e: Exception) {
-            // try again the next time the live page loads
-        }
-    }
-
-    private fun fetchText(url: String): String {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 3000
-        c.readTimeout = 8000
-        try {
-            return c.inputStream.bufferedReader().readText()
-        } finally {
-            c.disconnect()
-        }
-    }
-
-    private fun offlineFile(path: String): WebResourceResponse {
+    private fun homeFile(path: String): WebResourceResponse {
         val rel = path.removePrefix("/tv/").ifEmpty { "index.html" }
         val notFound = { WebResourceResponse("text/plain", "utf-8", 404, "Not found", emptyMap(), ByteArrayInputStream(ByteArray(0))) }
         if (rel.contains("..")) return notFound()
-        val synced = useSynced()
-        // The settings: the bridge's (in its copy) when there is a bridge, else what apply.sh
-        // passed from config.json, else the defaults built into the app.
+        // The settings: what apply.sh passed from config.json, else the defaults built into the app.
         val given = prefs.getString("config", null)
-        if (rel == "config.js" && given != null && (!synced || !java.io.File(offlineDir, rel).isFile)) {
+        if (rel == "config.js" && given != null) {
             val js = "window.COUCH_CONFIG = $given;\n".toByteArray()
             return WebResourceResponse("application/javascript", "utf-8", ByteArrayInputStream(js))
         }
         val type = mimeFor(rel.substringAfterLast('.', ""))
         val text = type.startsWith("text/") || type.endsWith("javascript") || type.endsWith("json")
-        if (!synced) {
-            return try {
-                WebResourceResponse(type, if (text) "utf-8" else null, assets.open("$BUNDLED/$rel"))
-            } catch (e: Exception) {
-                notFound()
-            }
+        return try {
+            WebResourceResponse(type, if (text) "utf-8" else null, assets.open("$BUNDLED/$rel"))
+        } catch (e: Exception) {
+            notFound()
         }
-        val f = java.io.File(offlineDir, rel)
-        if (!f.isFile) return notFound()
-        return WebResourceResponse(type, if (text) "utf-8" else null, f.inputStream())
     }
 
     private fun mimeFor(ext: String): String {
@@ -606,7 +453,7 @@ class MainActivity : Activity() {
             typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
         })
         column.addView(TextView(this).apply {
-            text = "The bridge isn't answering, so shows and picks are hidden. Your apps still work."
+            text = "The home page didn't load. Your apps still work."
             setTextColor(CREAM_2)
             textSize = 17f
             setPadding(0, px(4), 0, px(18))
@@ -684,8 +531,9 @@ class MainActivity : Activity() {
             "android.media.tv.action.SETUP_INPUTS"          // the system list of TV inputs
         )
         private const val RETRY_MS = 15_000L
-        private const val OFFLINE_RETRY_MS = 60_000L   // looking for the bridge while the saved copy shows
-        private const val OFFLINE_HOST = "home.tvos.invalid"
+        // Never resolves on any network (.invalid is reserved): only shouldInterceptRequest answers it.
+        private const val HOME_HOST = "home.tvos.invalid"
+        private val TV_ID = Regex("[a-z-]{1,32}")
         private const val BUNDLED = "www/tv"   // the built-in copy, in the app's assets
         private const val SLOW_MS = 2_500L
         private const val MATCH_W = ViewGroup.LayoutParams.MATCH_PARENT
