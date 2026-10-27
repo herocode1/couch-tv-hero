@@ -144,7 +144,10 @@
     TVCFG = (CFG.tvs || []).filter(function (t) { return t.id === mine; })[0] || (CFG.tvs || [])[0] || {};
     // no "quick" from an older bridge: the sleep timer, and the picture switch where the TV has one
     QUICK = (TVCFG.quick || ["sleep", "picture"]).filter(function (q, i, a) { return QUICK_ALL.indexOf(q) >= 0 && a.indexOf(q) === i; });
-    THEME = (Q.match(/[?&]theme=([a-z]+)/) || [])[1] || kept("tvhome.look") || HOME.look || "night";
+    // A look kept from the Look button only counts while home.look is still what it was then, so
+    // sending a new home.look from config.json wins over an older press.
+    var pressed = kept("tvhome.lookfor") === (HOME.look || null) ? kept("tvhome.look") : null;
+    THEME = (Q.match(/[?&]theme=([a-z]+)/) || [])[1] || pressed || HOME.look || "night";
     if (LOOKS.indexOf(THEME) < 0) THEME = "night";
     SANCT = THEME === "sanctuary" && !!window.Sanctuary;
     if (THEME === "sanctuary" && !SANCT) THEME = "night";
@@ -522,6 +525,7 @@
   function toggleLook() {
     var looks = window.Sanctuary ? LOOKS : ["night", "classic"];
     keep("tvhome.look", looks[(looks.indexOf(THEME) + 1) % looks.length]);
+    keep("tvhome.lookfor", HOME.look || null);
     location.replace(location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, ""));
   }
   // The TV's own input list (HDMI, a console, a set top box): the TV_INPUT key through the bridge,
