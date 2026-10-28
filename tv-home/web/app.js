@@ -526,7 +526,10 @@
     var looks = window.Sanctuary ? LOOKS : ["night", "classic"];
     keep("tvhome.look", looks[(looks.indexOf(THEME) + 1) % looks.length]);
     keep("tvhome.lookfor", HOME.look || null);
-    location.replace(location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, ""));
+    // Start the page again in the new look. The same address does not always reload in the TV's
+    // WebView, so reload outright unless a ?theme= preview has to be dropped first.
+    var next = location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, "");
+    if (next === location.href) location.reload(); else location.replace(next);
   }
   // The TV's own input list (HDMI, a console, a set top box): the TV_INPUT key through the bridge,
   // or straight from the launcher when there is no bridge (only where the TV has such a screen).
