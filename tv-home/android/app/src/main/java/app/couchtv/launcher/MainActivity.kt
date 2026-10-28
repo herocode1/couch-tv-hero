@@ -59,6 +59,7 @@ class MainActivity : Activity() {
     private var fallback: View? = null
     private var pageReady = false
     private var loadFailed = false
+    private var retries = 0
 
     private val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
 
@@ -181,6 +182,7 @@ class MainActivity : Activity() {
             override fun onPageFinished(view: WebView, url: String) {
                 if (!loadFailed && url.startsWith("https://$HOME_HOST/")) {
                     pageReady = true
+                    retries = 0
                     removeFallback()
                     view.visibility = View.VISIBLE
                     view.requestFocus()
@@ -188,7 +190,8 @@ class MainActivity : Activity() {
             }
 
             override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
-                if (req.isForMainFrame) pageFailed()
+                // A load cut short by a newer one (config sent just after install) is not a failure.
+                if (req.isForMainFrame && !err.description.contains("ERR_ABORTED")) pageFailed()
             }
 
             override fun onReceivedHttpError(view: WebView, req: WebResourceRequest, res: WebResourceResponse) {
@@ -229,7 +232,8 @@ class MainActivity : Activity() {
         web?.visibility = View.INVISIBLE
         web?.stopLoading()
         showFallback()
-        main.postDelayed({ if (!pageReady) showHome() }, RETRY_MS)
+        // The first try after an install or update often fails while the WebView warms up: retry soon.
+        main.postDelayed({ if (!pageReady) showHome() }, if (retries++ == 0) QUICK_RETRY_MS else RETRY_MS)
     }
 
     // ---------------------------------------------------------------- the built-in copy
@@ -653,6 +657,7 @@ class MainActivity : Activity() {
             "android.media.tv.action.SETUP_INPUTS"          // the system list of TV inputs
         )
         private const val RETRY_MS = 15_000L
+        private const val QUICK_RETRY_MS = 2_000L
         // Never resolves on any network (.invalid is reserved): only shouldInterceptRequest answers it.
         private const val HOME_HOST = "home.tvos.invalid"
         private val TV_ID = Regex("[a-z-]{1,32}")
