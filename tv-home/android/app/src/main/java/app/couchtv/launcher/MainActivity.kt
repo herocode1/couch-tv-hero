@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -59,6 +60,7 @@ class MainActivity : Activity() {
     private var fallback: View? = null
     private var pageReady = false
     private var loadFailed = false
+    private var retries = 0
 
     private val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
 
@@ -89,8 +91,36 @@ class MainActivity : Activity() {
         super.onResume()
         hideSystemBars()
         if (pageReady) js("window.tv && tv.resume()")
-        else if (fallback != null) showHome()
+        else if (fallback != null || web == null) showHome()
         io.execute { warmApps() }
+    }
+
+    // Out of sight (an app is playing), the page sleeps: no clock, no polling, no animation.
+    override fun onStart() {
+        super.onStart()
+        web?.onResume()
+        web?.resumeTimers()
+    }
+
+    override fun onStop() {
+        web?.pauseTimers()
+        web?.onPause()
+        super.onStop()
+    }
+
+    // The TV has little memory. When Android asks for it back while an app is in front, give up the
+    // page (about 250 MB with its renderer); onResume builds it again when HOME comes back.
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND && !hasWindowFocus()) dropPage()
+    }
+
+    private fun dropPage() {
+        val w = web ?: return
+        root.removeView(w)
+        w.destroy()
+        web = null
+        pageReady = false
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -151,8 +181,10 @@ class MainActivity : Activity() {
         addJavascriptInterface(Native(), "TVOS")
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
+                Log.i(TAG, "page finished (failed=$loadFailed)")
                 if (!loadFailed && url.startsWith("https://$HOME_HOST/")) {
                     pageReady = true
+                    retries = 0
                     removeFallback()
                     view.visibility = View.VISIBLE
                     view.requestFocus()
@@ -160,7 +192,9 @@ class MainActivity : Activity() {
             }
 
             override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
-                if (req.isForMainFrame) pageFailed()
+                // A load cut short by a newer one (config sent just after install) is not a failure.
+                if (req.isForMainFrame) Log.i(TAG, "page error ${err.errorCode} ${err.description}")
+                if (req.isForMainFrame && !err.description.contains("ERR_ABORTED")) pageFailed()
             }
 
             override fun onReceivedHttpError(view: WebView, req: WebResourceRequest, res: WebResourceResponse) {
@@ -187,10 +221,7 @@ class MainActivity : Activity() {
 
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                 // The page crashed or was killed for memory. Drop it and start again.
-                root.removeView(view)
-                view.destroy()
-                web = null
-                pageReady = false
+                if (view === web) dropPage() else { root.removeView(view); view.destroy() }
                 showHome()
                 return true
             }
@@ -204,8 +235,11 @@ class MainActivity : Activity() {
         web?.visibility = View.INVISIBLE
         web?.stopLoading()
         showFallback()
-        main.postDelayed({ if (!pageReady) showHome() }, RETRY_MS)
     }
+
+    // While the grid stands in for the page, keep trying: soon the first time (right after an
+    // install the WebView is still warming up), then every RETRY_MS.
+    private val retryHome = Runnable { if (!pageReady && fallback != null) { Log.i(TAG, "retrying the page"); showHome() } }
 
     // ---------------------------------------------------------------- the built-in copy
 
@@ -218,6 +252,7 @@ class MainActivity : Activity() {
     private fun showHome() {
         if (!hasBundled) { showFallback(); return }
         val w = web ?: makeWebView().also { web = it; root.addView(it, 0, MATCH) }
+        w.resumeTimers()   // timers are shared by every page, and onStop may have paused them
         loadFailed = false
         pageReady = false
         val tv = prefs.getString("tv", null)
@@ -254,10 +289,15 @@ class MainActivity : Activity() {
      * plain GET of those two /local/ paths, only to a private address on the home network, and no
      * login: the TV never holds a Home Assistant token. Home Assistant on the home network speaks
      * plain http, which the app otherwise refuses, so this one read goes over its own socket.
+     *
+     * /ha/do/<action> is the one thing the TV can ask of the house: it POSTs {"action": ...} to the
+     * webhook named in home.ha.webhook (on the same address). Home Assistant decides what each action
+     * does, and only runs the safe ones it lists (lock, close, the AC, lights); the TV only names one.
      */
     private fun haFile(name: String): WebResourceResponse {
         val none = { code: Int -> WebResourceResponse("text/plain", "utf-8", code, if (code == 404) "Not found" else "Bad gateway", emptyMap(), ByteArrayInputStream(ByteArray(0))) }
         val ha = haConfig() ?: return none(404)
+        if (name.startsWith("do/")) return haDo(ha, name.removePrefix("do/"))
         val (path, type) = when (name) {
             "feed" -> ha.optString("feed") to "application/json"
             "doorbell" -> ha.optString("doorbell") to "image/jpeg"
@@ -270,6 +310,31 @@ class MainActivity : Activity() {
         val body = try { httpGet(host, port, path) } catch (e: Exception) { null } ?: return none(502)
         return WebResourceResponse(type, if (type.endsWith("json")) "utf-8" else null, 200, "OK",
             mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(body))
+    }
+
+    private fun haDo(ha: JSONObject, action: String): WebResourceResponse {
+        val reply = { code: Int, text: String -> WebResourceResponse("text/plain", "utf-8", code, text,
+            mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(ByteArray(0))) }
+        val hook = ha.optString("webhook")
+        if (!HA_ACTION.matches(action) || !HA_HOOK.matches(hook)) return reply(404, "Not found")
+        val m = HA_URL.matchEntire(ha.optString("url")) ?: return reply(404, "Not found")
+        val host = m.groupValues[1]
+        val port = m.groupValues[2].ifEmpty { "80" }.toInt()
+        val ok = try { httpPost(host, port, hook, JSONObject().put("action", action).toString()) } catch (e: Exception) { false }
+        return if (ok) reply(200, "OK") else reply(502, "Bad gateway")
+    }
+
+    /** HTTP/1.0 POST of a small JSON body; true for any 2xx answer. */
+    private fun httpPost(host: String, port: Int, path: String, json: String): Boolean {
+        java.net.Socket().use { s ->
+            s.connect(java.net.InetSocketAddress(host, port), 3000)
+            s.soTimeout = 5000
+            val body = json.toByteArray(Charsets.UTF_8)
+            s.getOutputStream().write(("POST $path HTTP/1.0\r\nHost: $host:$port\r\nContent-Type: application/json\r\n" +
+                "Content-Length: ${body.size}\r\nConnection: close\r\n\r\n").toByteArray(Charsets.US_ASCII) + body)
+            val status = s.getInputStream().bufferedReader(Charsets.US_ASCII).readLine() ?: return false
+            return status.matches(Regex("HTTP/1\\.[01] 2\\d\\d.*"))
+        }
     }
 
     private fun haConfig(): JSONObject? = try {
@@ -356,6 +421,11 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun openInputs(): Boolean = inputsIntent()?.let { start(it) } ?: false
+
+        // Start the page again (the Look button). The page cannot navigate itself: every
+        // navigation is refused in shouldOverrideUrlLoading, reloads included.
+        @JavascriptInterface
+        fun reload() { main.post { showHome() } }
 
         // The saved copy has its own web storage, so the page keeps what it needs offline here.
         @JavascriptInterface
@@ -499,6 +569,8 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- never stuck: the native grid
 
     private fun showFallback() {
+        main.removeCallbacks(retryHome)
+        main.postDelayed(retryHome, if (retries++ == 0) QUICK_RETRY_MS else RETRY_MS)
         if (fallback != null) return
         val dp = resources.displayMetrics.density
         fun px(v: Int) = (v * dp).toInt()
@@ -592,6 +664,8 @@ class MainActivity : Activity() {
             "android.media.tv.action.SETUP_INPUTS"          // the system list of TV inputs
         )
         private const val RETRY_MS = 15_000L
+        private const val QUICK_RETRY_MS = 2_000L
+        private const val TAG = "couchtv"
         // Never resolves on any network (.invalid is reserved): only shouldInterceptRequest answers it.
         private const val HOME_HOST = "home.tvos.invalid"
         private val TV_ID = Regex("[a-z-]{1,32}")
@@ -600,6 +674,8 @@ class MainActivity : Activity() {
         private val HA_URL = Regex("http://((?:10\\.\\d{1,3}|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d{1,3}\\.\\d{1,3})(?::(\\d{2,5}))?/?")
         private val HA_PATH = Regex("/local/[A-Za-z0-9._-]{1,80}")
         private const val HA_MAX = 3_000_000
+        private val HA_HOOK = Regex("/api/webhook/[A-Za-z0-9_-]{16,80}")
+        private val HA_ACTION = Regex("[a-z0-9_]{1,40}")
         private const val BUNDLED = "www/tv"   // the built-in copy, in the app's assets
         private const val SLOW_MS = 2_500L
         private const val MATCH_W = ViewGroup.LayoutParams.MATCH_PARENT

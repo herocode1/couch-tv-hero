@@ -63,7 +63,8 @@ The Sanctuary look can show a train line, up to five house tiles and a doorbell 
   "ha": {
     "url": "http://<home assistant address>:8123",
     "feed": "/local/<feed file name>.json",
-    "doorbell": "/local/<doorbell snapshot>.jpg"
+    "doorbell": "/local/<doorbell snapshot>.jpg",
+    "webhook": "/api/webhook/<long random id>"
   }
 }
 ```
@@ -75,6 +76,7 @@ The Sanctuary look can show a train line, up to five house tiles and a doorbell 
   paths, with a plain GET. Home Assistant on a home network speaks http, which the app otherwise
   refuses, so this one read uses its own socket. Nothing else in the app can use cleartext.
 - Leave `ha` out and the look shows no house tiles, train or doorbell.
+- `webhook` is optional and makes the tiles pressable (below). Left out, they only show.
 
 ### The feed
 
@@ -120,3 +122,24 @@ shell_command:
 Then add an automation that calls `shell_command.tv_feed` with
 `feed: "{{ <the JSON above, built with a template> | to_json | base64_encode }}"`. Trigger it
 when the entities change, and on a one-minute `time_pattern`.
+
+### Pressing a tile
+
+With `webhook` set, the house tiles are a row of their own: press Up from the dock to reach them,
+and OK opens the tile with the actions Home Assistant listed for it. A tile in the feed can carry
+up to four:
+
+```json
+{ "kind": "unlock", "name": "Front door", "value": "Unlocked", "ok": false,
+  "actions": [{ "id": "lock_front", "label": "Lock" }] }
+```
+
+The TV then POSTs `{"action": "lock_front"}` to the webhook. `camera` is the one action the TV
+handles itself (it shows the doorbell snapshot). Action ids are lowercase letters, digits and `_`.
+
+- **The TV still holds no login.** Anything on the home network that learns the webhook id can send
+  the same actions, so Home Assistant should only map ids to things that are safe for anyone in
+  the room to do: lock, never unlock; close the garage, never open it; the AC; lights.
+- In Home Assistant, a webhook trigger with `allowed_methods: [POST]` and `local_only: true`, then
+  a `choose` on `trigger.json.action` with one branch per id. An unknown id does nothing. Run the
+  feed automation again at the end so the tile shows the new state.
