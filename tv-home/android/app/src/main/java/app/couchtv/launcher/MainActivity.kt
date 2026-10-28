@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -180,6 +181,7 @@ class MainActivity : Activity() {
         addJavascriptInterface(Native(), "TVOS")
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
+                Log.i(TAG, "page finished (failed=$loadFailed)")
                 if (!loadFailed && url.startsWith("https://$HOME_HOST/")) {
                     pageReady = true
                     retries = 0
@@ -191,6 +193,7 @@ class MainActivity : Activity() {
 
             override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
                 // A load cut short by a newer one (config sent just after install) is not a failure.
+                if (req.isForMainFrame) Log.i(TAG, "page error ${err.errorCode} ${err.description}")
                 if (req.isForMainFrame && !err.description.contains("ERR_ABORTED")) pageFailed()
             }
 
@@ -232,9 +235,11 @@ class MainActivity : Activity() {
         web?.visibility = View.INVISIBLE
         web?.stopLoading()
         showFallback()
-        // The first try after an install or update often fails while the WebView warms up: retry soon.
-        main.postDelayed({ if (!pageReady) showHome() }, if (retries++ == 0) QUICK_RETRY_MS else RETRY_MS)
     }
+
+    // While the grid stands in for the page, keep trying: soon the first time (right after an
+    // install the WebView is still warming up), then every RETRY_MS.
+    private val retryHome = Runnable { if (!pageReady && fallback != null) { Log.i(TAG, "retrying the page"); showHome() } }
 
     // ---------------------------------------------------------------- the built-in copy
 
@@ -564,6 +569,8 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- never stuck: the native grid
 
     private fun showFallback() {
+        main.removeCallbacks(retryHome)
+        main.postDelayed(retryHome, if (retries++ == 0) QUICK_RETRY_MS else RETRY_MS)
         if (fallback != null) return
         val dp = resources.displayMetrics.density
         fun px(v: Int) = (v * dp).toInt()
@@ -658,6 +665,7 @@ class MainActivity : Activity() {
         )
         private const val RETRY_MS = 15_000L
         private const val QUICK_RETRY_MS = 2_000L
+        private const val TAG = "couchtv"
         // Never resolves on any network (.invalid is reserved): only shouldInterceptRequest answers it.
         private const val HOME_HOST = "home.tvos.invalid"
         private val TV_ID = Regex("[a-z-]{1,32}")

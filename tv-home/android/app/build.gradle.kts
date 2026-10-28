@@ -13,8 +13,8 @@ android {
         applicationId = "app.couchtv.launcher"
         minSdk = 28
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.3.3-hero"
+        versionCode = 9
+        versionName = "1.3.4-hero"
         // couch-tv-hero has no bridge: the home page is always the copy built into the app.
     }
     buildFeatures { buildConfig = true }
