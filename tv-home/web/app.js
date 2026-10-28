@@ -441,10 +441,10 @@
     try { return !!(TV && TV.canOpenInputs && TV.canOpenInputs()); } catch (e) { return false; }
   }
   function quickVisible() {
-    return QUICK.filter(function (q) {
+    return (SANCT ? ["look", "input", "settings"] : QUICK).filter(function (q) {
       if (q === "sleep") return !OFFLINE;
       if (q === "picture") return !OFFLINE && picShown;
-      if (q === "look") return true;
+      if (q === "look" || q === "settings") return true;
       if (q === "input") return !OFFLINE || nativeInputs();
       return false;
     });
@@ -477,9 +477,11 @@
         el.innerHTML = ICONS.picture + "<span>" + esc(picLabel()) + "</span>";
         el.classList.toggle("off", !picCanSet);
       } else if (q === "look") {
-        el.innerHTML = ICONS.look + "<span>" + (SANCT ? "Night look" : NIGHT ? "Classic look" : window.Sanctuary ? "Sanctuary look" : "Night look") + "</span>";
+        el.innerHTML = ICONS.look + "<span>" + (SANCT ? "Photos" : NIGHT ? "Classic look" : window.Sanctuary ? "Sanctuary look" : "Night look") + "</span>";
       } else if (q === "input") {
-        el.innerHTML = ICONS.input + "<span>Input</span>";
+        el.innerHTML = ICONS.input + "<span>Inputs</span>";
+      } else if (q === "settings") {
+        el.innerHTML = ICONS.gear + "<span>Settings</span>";
       }
     });
     if (qi >= vis.length) qi = Math.max(0, vis.length - 1);
@@ -546,6 +548,7 @@
     else if (q === "picture") togglePicture();
     else if (q === "look") toggleLook();
     else if (q === "input") openInputs();
+    else if (q === "settings") Sanctuary.openSettings();
   }
   function refreshQuick() {
     var jobs = [];
@@ -686,7 +689,7 @@
 
   // ---------------- apps ----------------
   function tucked(a) {
-    return TUCKED.indexOf(a.package) >= 0 || TUCKED_NAMES.test(a.name || "");
+    return (SANCT && /^(com\.tcl\.|com\.eliotcougar\.|com\.shieldglow\.|de\.cyberdream\.)/.test(a.package)) || TUCKED.indexOf(a.package) >= 0 || TUCKED_NAMES.test(a.name || "");
   }
   function isNew(pkg) { return newApps.indexOf(pkg) >= 0; }
   function gridList() {
@@ -912,8 +915,9 @@
     gridItems = gridList();
     if (NIGHT) {
       // the dock is as wide as what is in it; More apps uses all twelve columns
-      GRID_COLS = expanded ? 12 : Math.max(1, Math.min(12, gridItems.length));
-      $("grid").style.gridTemplateColumns = "repeat(" + GRID_COLS + ", 7rem)";
+      GRID_COLS = expanded ? (SANCT ? 5 : 12) : Math.max(1, Math.min(12, gridItems.length));
+      $("grid").style.gridTemplateColumns = "repeat(" + GRID_COLS + (SANCT && expanded ? ", 10.5rem)" : ", 7rem)");
+      if (SANCT) Sanctuary.layout();
     }
     $("grid").innerHTML = gridItems.map(appHTML).join("");
     gridEls = Array.prototype.slice.call($("grid").children);
@@ -942,7 +946,7 @@
   function peopleOn() { return peopleCount() >= 2 && shelfOn(); }
   function toPeople() { zone = "people"; pi = whoIndex(); }
   // the Sanctuary look's house tiles, a row of their own between the quick buttons and the dock
-  function houseOn() { return SANCT && Sanctuary.houseCount() > 0; }
+  function houseOn() { return SANCT && !expanded && Sanctuary.houseCount() > 0; }
   function toHouse(x) { zone = "house"; hi = Sanctuary.houseNear(x); }
   function nearestQuick(x) {
     var best = 0, bestD = Infinity;
@@ -985,7 +989,7 @@
     } else {
       zone = "grid";
       g = Math.max(0, Math.min(g, gridEls.length - 1));
-      if (gridEls[g]) gridEls[g].classList.add("focus");
+      if (gridEls[g]) { gridEls[g].classList.add("focus"); if (SANCT && expanded) gridEls[g].scrollIntoView({ block: "nearest" }); }
       hero(null);
       $("place").style.visibility = "";
       showPhoto();
@@ -1143,7 +1147,8 @@
     }
     var a = gridItems[g], el = gridEls[g];
     if (!a) return;
-    if (a.kind === "more") { expanded = true; renderGrid(); paintFocus(); return; }
+    if (SANCT && a.package === SETTINGS_PKG) { Sanctuary.openSettings(); return; }
+    if (a.kind === "more") { if (SANCT) g = 0; expanded = true; renderGrid(); paintFocus(); return; }
     if (a.kind === "screen") {
       if (!a.ready) { status(a.note || "That screen isn't set up yet."); return; }
       el.classList.add("busy");
@@ -1197,7 +1202,7 @@
     }
     var arrow = arrowOf(e);
     if (arrow) move(arrow[0], arrow[1]);
-    else if (isBack(e)) goHome();
+    else if (isBack(e)) { if (!(SANCT && Sanctuary.back())) goHome(); }
     else if (isMenu(e)) { if (!e.repeat) hold(); }   // optional: many remotes have no Menu key
     else { ensureFocus(); return; }                   // anything else is not ours: Android gets it
     e.preventDefault();
@@ -1225,7 +1230,8 @@
   }
   function sortApps(list) {
     var rank = function (p) {
-      var i = APP_ORDER.indexOf(p);
+      var preferred = SANCT ? ["com.google.android.youtube.tv", "com.netflix.ninja", "com.disney.disneyplus", "com.amazon.amazonvideo.livingroom", "com.apple.atve.androidtv.appletv", "com.wbd.stream", "com.fox.foxone", "com.hulu.livingroomplus", "com.instagram.airwave", "com.ubnt.unifi.protect"] : APP_ORDER;
+      var i = preferred.indexOf(p);
       if (i >= 0) return i;
       i = APP_LAST.indexOf(p);
       return i >= 0 ? 2000 + i : 1000;
@@ -1319,6 +1325,7 @@
   // Sanctuary gets BACK first, to close the doorbell picture.
   window.tv = { back: function () { if (!(SANCT && Sanctuary.back())) goHome(); },
     home: function () { if (SANCT) Sanctuary.back(); goHome(); refresh(); },
+    pause: function () { okReset(); if (SANCT) Sanctuary.pause(); },
     resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); if (SANCT) Sanctuary.resume(); } };
 
   function start() {
@@ -1327,7 +1334,7 @@
     clock();
     setInterval(clock, 15000);
     if (SANCT) {
-      Sanctuary.start({ config: CFG, clock24: CLOCK24, tv: TV });
+      Sanctuary.start({ config: CFG, clock24: CLOCK24, tv: TV, toggleLook: toggleLook });
       refreshWeather();
       setInterval(refreshWeather, 30 * 60000);
     } else if (NIGHT) {
