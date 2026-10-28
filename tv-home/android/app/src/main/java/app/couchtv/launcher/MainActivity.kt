@@ -413,6 +413,11 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun openInputs(): Boolean = inputsIntent()?.let { start(it) } ?: false
 
+        // Start the page again (the Look button). The page cannot navigate itself: every
+        // navigation is refused in shouldOverrideUrlLoading, reloads included.
+        @JavascriptInterface
+        fun reload() { main.post { showHome() } }
+
         // The saved copy has its own web storage, so the page keeps what it needs offline here.
         @JavascriptInterface
         fun keep(key: String, value: String) {

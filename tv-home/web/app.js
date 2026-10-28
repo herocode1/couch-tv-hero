@@ -526,8 +526,9 @@
     var looks = window.Sanctuary ? LOOKS : ["night", "classic"];
     keep("tvhome.look", looks[(looks.indexOf(THEME) + 1) % looks.length]);
     keep("tvhome.lookfor", HOME.look || null);
-    // Start the page again in the new look. The same address does not always reload in the TV's
-    // WebView, so reload outright unless a ?theme= preview has to be dropped first.
+    // Start the page again in the new look. Inside the app the launcher does it (the app refuses
+    // every navigation the page starts); in a browser preview, drop any ?theme= and reload.
+    try { if (TV && TV.reload) { TV.reload(); return; } } catch (e) {}
     var next = location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, "");
     if (next === location.href) location.reload(); else location.replace(next);
   }
@@ -943,6 +944,11 @@
   // the Sanctuary look's house tiles, a row of their own between the quick buttons and the dock
   function houseOn() { return SANCT && Sanctuary.houseCount() > 0; }
   function toHouse(x) { zone = "house"; hi = Sanctuary.houseNear(x); }
+  function nearestQuick(x) {
+    var best = 0, bestD = Infinity;
+    quickEls.forEach(function (el, i) { var d = Math.abs(midX(el) - x); if (d < bestD) { bestD = d; best = i; } });
+    return best;
+  }
   function midX(el) { var b = el.getBoundingClientRect(); return b.left + b.width / 2; }
 
   function paintFocus() {
@@ -1032,7 +1038,7 @@
     if (zone === "house" && !houseOn()) zone = "grid";   // Home Assistant went quiet under the focus
     if (zone === "house") {
       if (dx) hi = Math.max(0, Math.min(Sanctuary.houseCount() - 1, hi + dx));
-      else if (dy < 0) { if (hasQuick()) { zone = "quick"; qi = quickVisible().length - 1; } }
+      else if (dy < 0) { if (hasQuick()) { zone = "quick"; qi = nearestQuick(Sanctuary.houseX(hi)); } }
       else if (dy > 0 && gridEls.length) { g = nearestInRow(0, Sanctuary.houseX(hi)); zone = "grid"; }
       paintFocus();
       return;
