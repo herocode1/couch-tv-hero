@@ -274,9 +274,11 @@
       var g = GLYPH[t.kind] || GLYPH.home;
       return '<div class="sa-tile' + (t.ok === true ? " ok" : t.ok === false ? " warn" : "") +
         (t.kind === "bell" ? " doorbell" : "") + (i === hi && !old ? " focus" : "") + '">' +
-        (t.kind === "bell" ? '<div class="sa-thumb"><img id="sa-thumb-img" alt="Front door"' + (thumbSrc ? ' src="' + esc(thumbSrc) + '"' : '') + '><span>LIVE &middot; Front door</span></div>' : '') + '<div class="k">' + g + esc(t.name) + '</div><div class="v">' + esc(old ? "…" : t.value) + "</div></div>";
+        (t.kind === "bell" ? '<div class="sa-thumb"><img id="sa-thumb-img" alt="Front door"' + (thumbSrc ? ' class="ok" src="' + esc(thumbSrc) + '"' : '') + '><span>LIVE &middot; Front door</span></div>' : '') + '<div class="k">' + g + esc(t.name) + '</div><div class="v">' + esc(old ? "…" : t.value) + "</div></div>";
     }).join("") + (old ? '<p class="sa-old">Home Assistant is not answering</p>' : "");
     if (oldThumb && $("sa-thumb-img")) $("sa-thumb-img").replaceWith(oldThumb);
+    // a long value ("Locked · Apt unlocked") gets smaller type rather than running past the card
+    Array.prototype.forEach.call(box.querySelectorAll(".v"), function (v) { if (v.scrollWidth > v.clientWidth) v.classList.add("tight"); });
   }
 
   // ---------------- Home Assistant ----------------
@@ -326,8 +328,10 @@
     var img = camOn() ? $("sa-cam-img") : $("sa-thumb-img");
     if (img) {
       var src = imageSource();
-      if (!camOn()) thumbSrc = src;
-      img.src = src;
+      // swap the picture in only once it has loaded: no broken-image icon while Home Assistant has none yet
+      var next = new Image();
+      next.onload = function () { img.src = src; img.classList.add("ok"); if (img.id === "sa-thumb-img") thumbSrc = src; };
+      next.src = src;
     }
     imageTimer = setTimeout(refreshImages, camOn() ? 1000 : 30000);
   }
@@ -350,7 +354,7 @@
   }
   function closeCam() {
     $("sa-cam").classList.remove("on"); document.documentElement.classList.remove("camera-open");
-    $("sa-cam-img").removeAttribute("src"); refreshImages();
+    $("sa-cam-img").removeAttribute("src"); $("sa-cam-img").classList.remove("ok"); refreshImages();
   }
   var SETTINGS = [["wifi", "Wi-Fi", "M3 8q9-9 18 0M6 12q6-6 12 0M9 16q3-3 6 0M12 20h.01"],
     ["picture", "Picture", "M3 3h18v18H3zM3 18l6-7 5 5 3-3 4 5M16 7h.01"],
