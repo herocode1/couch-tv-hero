@@ -477,7 +477,7 @@
         el.innerHTML = ICONS.picture + "<span>" + esc(picLabel()) + "</span>";
         el.classList.toggle("off", !picCanSet);
       } else if (q === "look") {
-        el.innerHTML = ICONS.look + "<span>" + (SANCT ? "Photos" : NIGHT ? "Classic look" : window.Sanctuary ? "Sanctuary look" : "Night look") + "</span>";
+        el.innerHTML = ICONS.look + "<span>" + (SANCT ? "Look" : NIGHT ? "Classic look" : window.Sanctuary ? "Sanctuary look" : "Night look") + "</span>";
       } else if (q === "input") {
         el.innerHTML = ICONS.input + "<span>Inputs</span>";
       } else if (q === "settings") {
