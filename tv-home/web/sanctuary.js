@@ -1,4 +1,4 @@
-// The Sanctuary look: green and gold, the Church's season with its stained-glass window, a verse
+// The Sanctuary look: near-black and gold, the Church's season with its stained-glass window, a verse
 // for the day, and the house from Home Assistant (train, doors, doorbell). app.js keeps the dock
 // of apps and the quick buttons; this file draws everything above them.
 //
@@ -179,22 +179,21 @@
     el.innerHTML =
       '<div class="sa-left">' +
         '<div class="sa-time" id="sa-time"></div>' +
-        '<div class="sa-date" id="sa-date"></div>' +
-        '<div class="sa-season" id="sa-season"></div>' +
-        '<div class="sa-feast" id="sa-feast"></div>' +
-        '<div class="sa-wx" id="sa-wx"></div>' +
-        '<div class="sa-train" id="sa-train"></div>' +
+        '<div class="sa-orn orn">\u2720</div>' +
+        '<div class="sa-date cap" id="sa-date"></div>' +
         '<div class="sa-verse" id="sa-verse"></div>' +
+        '<div class="sa-train" id="sa-train"></div>' +
       "</div>" +
       '<div class="sa-arch"><img id="sa-art" alt=""></div>' +
+      '<div class="sa-under"><div class="sa-feast" id="sa-feast"></div><div class="sa-wx" id="sa-wx"></div></div>' +
       '<div class="sa-house" id="sa-house"></div>' +
       '<div class="sa-toast" id="sa-toast"><i></i><span>Someone is at the front door</span><b>Press OK for the camera</b></div>' +
       '<div class="sa-act" id="sa-act"></div>' +
-      '<div class="sa-cam" id="sa-cam"><img id="sa-cam-img" alt="Front door camera">' +
-        '<div class="sa-cam-side"><h2>&#9679; Front door &middot; Live</h2><p id="sa-cam-note"></p>' +
-        '<div class="sa-cam-buttons"><button>Open Protect</button><button>Close</button></div>' +
-        '<div id="sa-cam-verse"></div><div id="sa-cam-weather"></div></div></div>' +
-      '<div class="sa-settings" id="sa-settings"></div><div class="sa-title" id="sa-title"></div>';
+      '<div class="sa-cam" id="sa-cam"><img id="sa-cam-img" alt="Front door camera"><span class="sa-cam-live">Live</span>' +
+        '<div class="sa-cam-side"><h2>Front door</h2><div class="orn">\u2720</div><p id="sa-cam-note"></p>' +
+        '<div class="sa-cam-buttons"><button>Open Protect</button><button>Close</button></div></div></div>' +
+      '<div class="sa-title" id="sa-title"></div><div class="sa-title-orn orn">\u2720</div>' +
+      '<div class="sa-settings" id="sa-settings"></div><div class="sa-hint">Back to return home</div>';
     document.body.insertBefore(el, document.body.firstChild);
   }
 
@@ -206,17 +205,19 @@
   var shownDay = "";
   function tick() {
     var d = new Date();
-    $("sa-time").textContent = hm(d) + (clock24 ? "" : d.getHours() < 12 ? " AM" : " PM");
-    $("sa-date").textContent = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) + " \u00b7 " + $("sa-time").textContent;
+    $("sa-time").innerHTML = esc(hm(d)).replace(":", "<i>:</i>");
     var key = d.toDateString();
     if (key !== shownDay) {
       shownDay = key;
       var today = day(d.getFullYear(), d.getMonth() + 1, d.getDate());
       var s = season(today), f = nextFeast(today), v = verse(today, s);
       document.documentElement.className = document.documentElement.className.replace(/\btone-\w+/g, "").trim() + " tone-" + s.tone;
-      $("sa-feast").textContent = d.getMonth() === 9 && d.getDate() === 28 ? "Feast of Sts. Simon and Jude, Apostles" : s.name;
-      $("sa-season").innerHTML = "<i></i>" + esc(s.name) + (f ? '<span class="sep">·</span>' + esc(f) : "");
-      $("sa-verse").innerHTML = esc(v[0]) + "<b>\u2014 " + esc(v[1]) + "</b>";
+      // "Thursday · October 29 · Ordinary Time", the feast's name on its day; what is coming goes under the window
+      var name = d.getMonth() === 9 && d.getDate() === 28 ? "Sts. Simon and Jude" : f.indexOf("Today: ") === 0 ? f.slice(7) : s.name;
+      $("sa-date").textContent = d.toLocaleDateString("en-US", { weekday: "long" }) + " \u00b7 " +
+        d.toLocaleDateString("en-US", { month: "long", day: "numeric" }) + " \u00b7 " + name;
+      $("sa-feast").textContent = f && f.indexOf("Today: ") !== 0 ? f : s.name;
+      $("sa-verse").innerHTML = esc(v[0]) + "<b>" + esc(v[1].replace(":", " \u00b7 ")) + "</b>";
       $("sa-verse").classList.toggle("long", v[0].length > 100);
       $("sa-art").src = "art/arch-" + s.art + ".webp";
     }
@@ -233,29 +234,41 @@
 
   function fresh() { return feed && feed.updated && (Date.now() / 1000 - feed.updated) < STALE_S; }
 
+  // The train to catch: the first one there is still time to walk to. Home Assistant's own
+  // leave_in says how much platform time it keeps; the trains after that one get the same.
   function trainState(t, updated, now) {
     var elapsed = Math.max(0, (now - updated) / 60), walk = Number(t.walk);
     if (!isFinite(walk)) walk = t.next != null && t.leave_in != null ? t.next - t.leave_in : 0;
     var times = Array.isArray(t.times) ? t.times.filter(function (n) { return typeof n === "number" && isFinite(n); }).sort(function (a, b) { return a - b; }) : [t.next, t.after].filter(function (n) { return typeof n === "number" && isFinite(n); });
-    var index = 0;
-    while (index < times.length && times[index] < elapsed) index++;
-    if (index === times.length) return null;
-    var leave = index === 0 && t.leave_in != null ? Number(t.leave_in) : times[index] - walk;
-    return { leave: leave - elapsed, by: updated + leave * 60, walk: walk,
-      times: times.slice(index, index + 2).map(function (n) { return updated + n * 60; }),
-      go: leave - elapsed <= 0 || (index === 0 && !!t.leave_now) };
+    var c = 0;
+    while (c < times.length && times[c] < walk) c++;
+    var pad = c < times.length && t.leave_in != null && isFinite(Number(t.leave_in)) ? Math.max(0, times[c] - walk - Number(t.leave_in)) : 0;
+    var i = 0;
+    while (i < times.length && times[i] - walk - pad - elapsed < -0.5) i++;
+    if (i === times.length) return null;
+    var leave = times[i] - walk - pad - elapsed, nx = times[i + 1];
+    return { leave: leave, walk: walk, train: updated + times[i] * 60,
+      next: nx != null ? { train: updated + nx * 60, by: updated + (nx - walk - pad) * 60 } : null,
+      go: leave <= 1 || (i === c && elapsed < 1 && !!t.leave_now) };
   }
+  // "Leave in 7 minutes / for the 6:59 train at Morris Park · 7 min walk / Too late? Next: ..."
   function drawTrain() {
     var t = fresh() && feed.train, el = $("sa-train"), state = t && trainState(t, feed.updated, Date.now() / 1000);
     if (!state) { el.innerHTML = ""; el.classList.remove("go"); return; }
+    var mins = Math.max(0, Math.ceil(state.leave));
     el.classList.toggle("go", state.go);
-    el.innerHTML = '<div class="sa-line"><span class="bullet">' + esc(t.line) + '</span>' + esc(t.line) + ' train \u00b7 ' + esc(t.stop) + '</div>' +
-      '<div class="sa-depart">Leave by ' + hm(new Date(state.by * 1000)) + ' \u00b7 in ' + Math.max(0, Math.ceil(state.leave)) + ' min' +
-      (state.go ? '<span class="sa-go">Time to go</span>' : '') + '</div><div class="sa-next">' +
-      (state.times.length ? 'then ' + state.times.map(function (n) { return hm(new Date(n * 1000)); }).join(' \u00b7 ') + '<br>' : '') + esc(state.walk) + ' min walk</div>';
+    el.innerHTML = '<span class="bullet">' + esc(t.line) + '</span><div>' +
+      '<div class="sa-leave">' + (state.go ? "Leave now" : "Leave in <em>" + mins + "</em> " + (mins === 1 ? "minute" : "minutes")) + '</div>' +
+      '<div class="sa-for">for the <b>' + hm(new Date(state.train * 1000)) + '</b> train at ' + esc(t.stop) + ' \u00b7 ' + esc(state.walk) + ' min walk</div>' +
+      (state.next ? '<div class="sa-then">Too late? Next: leave at ' + hm(new Date(state.next.by * 1000)) + ' for the ' + hm(new Date(state.next.train * 1000)) + '</div>' : '') +
+      '</div>';
   }
 
-  function houseTiles() { return haOn && feed && Array.isArray(feed.tiles) ? feed.tiles.slice(0, 5) : []; }
+  // the doorbell always last: it is the picture card beside the panel
+  function houseTiles() {
+    var tiles = haOn && feed && Array.isArray(feed.tiles) ? feed.tiles.slice(0, 5) : [];
+    return tiles.filter(function (t) { return t.kind !== "bell"; }).concat(tiles.filter(function (t) { return t.kind === "bell"; }));
+  }
   // what OK on a tile offers: only the actions Home Assistant listed for it, in its own words
   function actions(t) {
     return (Array.isArray(t.actions) ? t.actions : []).filter(function (a) {
@@ -270,11 +283,14 @@
     var old = !fresh();
     box.classList.toggle("old", old);
     if (hi >= tiles.length) hi = tiles.length - 1;
+    var last = -1;
+    tiles.forEach(function (t, i) { if (t.kind !== "bell") last = i; });
     box.innerHTML = tiles.map(function (t, i) {
-      var g = GLYPH[t.kind] || GLYPH.home;
-      return '<div class="sa-tile' + (t.ok === true ? " ok" : t.ok === false ? " warn" : "") +
-        (t.kind === "bell" ? " doorbell" : "") + (i === hi && !old ? " focus" : "") + '">' +
-        (t.kind === "bell" ? '<div class="sa-thumb"><img id="sa-thumb-img" alt="Front door"' + (thumbSrc ? ' class="ok" src="' + esc(thumbSrc) + '"' : '') + '><span>LIVE &middot; Front door</span></div>' : '') + '<div class="k">' + g + esc(t.name) + '</div><div class="v">' + esc(old ? "…" : t.value) + "</div></div>";
+      var cls = "sa-tile" + (t.ok === true ? " ok" : t.ok === false ? " warn" : "") + (i === 0 ? " first" : "") + (i === last ? " end" : "") +
+        (t.kind === "bell" ? " doorbell" : "") + (i === hi && !old ? " focus" : "");
+      if (t.kind === "bell") return '<div class="' + cls + '"><div class="sa-thumb"><img id="sa-thumb-img" alt="Front door"' +
+        (thumbSrc ? ' class="ok" src="' + esc(thumbSrc) + '"' : '') + '><span>Front door</span></div></div>';
+      return '<div class="' + cls + '">' + esc(t.name) + '<span class="v">' + esc(old ? "…" : t.value) + "</span></div>";
     }).join("") + (old ? '<p class="sa-old">Home Assistant is not answering</p>' : "");
     if (oldThumb && $("sa-thumb-img")) $("sa-thumb-img").replaceWith(oldThumb);
     // a long value ("Locked · Apt unlocked") gets smaller type rather than running past the card
@@ -345,9 +361,8 @@
     if (camOn()) return;
     toast(false); camIndex = 0;
     var d = feed && feed.doorbell && feed.doorbell.last ? new Date(feed.doorbell.last * 1000) : null;
-    $("sa-cam-note").textContent = d ? "Last ring " + d.toLocaleDateString("en-US", { weekday: "short" }) + " " + hm(d) : "No recent ring";
-    $("sa-cam-verse").innerHTML = $("sa-verse").innerHTML;
-    $("sa-cam-weather").textContent = $("sa-feast").textContent + " \u00b7 " + $("sa-wx").textContent;
+    $("sa-cam-note").innerHTML = "Live now \u00b7 " + esc(hm(new Date())) + "<br>" +
+      (d ? "Last ring " + esc(d.toLocaleDateString("en-US", { weekday: "short" }) + " " + hm(d)) : "No recent ring");
     $("sa-cam").classList.add("on"); document.documentElement.classList.add("camera-open");
     camFocus(); refreshImages();
     sendAction("doorbell_live").catch(function () { if (camOn()) $("sa-cam-note").textContent = "Live refresh unavailable \u00b7 showing latest snapshot"; });
@@ -356,17 +371,17 @@
     $("sa-cam").classList.remove("on"); document.documentElement.classList.remove("camera-open");
     $("sa-cam-img").removeAttribute("src"); $("sa-cam-img").classList.remove("ok"); refreshImages();
   }
-  var SETTINGS = [["wifi", "Wi-Fi", "M3 8q9-9 18 0M6 12q6-6 12 0M9 16q3-3 6 0M12 20h.01"],
-    ["picture", "Picture", "M3 3h18v18H3zM3 18l6-7 5 5 3-3 4 5M16 7h.01"],
-    ["sound", "Sound", "M3 9h4l6-5v16l-6-5H3zM17 7q5 5 0 10M20 4q7 8 0 16"],
-    ["inputs", "Inputs", "M10 3h11v18H10M2 12h14M11 7l5 5-5 5"],
-    ["bluetooth", "Bluetooth", "M7 6l12 12-7 5V1l7 5L7 18"],
-    ["sleep", "Display & Sleep", "M2 3h20v15H2zM12 18v4M7 22h10M13 6a4 4 0 1 0 3 7 5 5 0 0 1-3-7"],
-    ["look", "Home look", "M2 11L12 2l10 9M5 9v13h14V9M9 22v-8h6v8"],
-    ["all", "All settings", "M4 5h16v14H4zM8 2v6M16 16v6M2 12h6M16 12h6M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0"]];
+  var SETTINGS = [["wifi", "Wi-Fi", "Home network", "M3 8q9-9 18 0M6 12q6-6 12 0M9 16q3-3 6 0M12 20h.01"],
+    ["picture", "Picture", "Picture modes", "M3 3h18v18H3zM3 18l6-7 5 5 3-3 4 5M16 7h.01"],
+    ["sound", "Sound", "Speakers and audio", "M3 9h4l6-5v16l-6-5H3zM17 7q5 5 0 10M20 4q7 8 0 16"],
+    ["inputs", "Inputs", "HDMI and more", "M10 3h11v18H10M2 12h14M11 7l5 5-5 5"],
+    ["bluetooth", "Bluetooth", "Remotes, speakers", "M7 6l12 12-7 5V1l7 5L7 18"],
+    ["sleep", "Display & Sleep", "Energy saving", "M2 3h20v15H2zM12 18v4M7 22h10M13 6a4 4 0 1 0 3 7 5 5 0 0 1-3-7"],
+    ["look", "Home look", "Change the look", "M2 11L12 2l10 9M5 9v13h14V9M9 22v-8h6v8"],
+    ["all", "All settings", "Everything else", "M4 5h16v14H4zM8 2v6M16 16v6M2 12h6M16 12h6M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0"]];
   function drawSettings() {
     $("sa-settings").innerHTML = SETTINGS.map(function (x, i) {
-      return '<div class="sa-setting' + (i === settingsIndex ? ' focus' : '') + '"><svg viewBox="0 0 24 24"><path d="' + x[2] + '"/></svg><span>' + x[1] + '</span></div>';
+      return '<div class="sa-setting' + (i === settingsIndex ? ' focus' : '') + '"><svg viewBox="0 0 24 24"><path d="' + x[3] + '"/></svg><div><span>' + esc(x[1]) + '</span><small>' + x[2] + '</small></div></div>';
     }).join('');
   }
   function openSettings() { settingsIndex = 0; document.documentElement.classList.add("settings-open"); $("sa-title").textContent = "Settings"; drawSettings(); refreshImages(); }
