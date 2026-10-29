@@ -1,122 +1,151 @@
-﻿/* Vespers: the Sanctuary layout at 1920x1080 (1rem = 16px). Other looks use app.css. */
+﻿/* Gallery: the Sanctuary layout at 1920x1080 (1rem = 16px). Other looks use app.css.
+   Near-black, the cathedral vault faint behind, one stained-glass window for the season, gold rules. */
 @font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-display: block; src: url(fonts/cormorant-garamond-latin-wght-normal.woff2) format("woff2"); }
+@font-face { font-family: "Cormorant Garamond"; font-style: italic; font-weight: 300 700; font-display: block; src: url(fonts/cormorant-garamond-latin-wght-italic.woff2) format("woff2"); }
 .sanct { display: none; }
-.theme-sanctuary { --gold: #c49b3c; --ink: #f4eedf; --ink-2: #e5ddc9; --dot: #159b48; --glass: rgba(0,18,10,.55); }
-.theme-sanctuary.tone-violet { --dot: #ab85d1; }
-.theme-sanctuary.tone-white { --dot: #f4ecd8; }
-.theme-sanctuary.tone-red { --dot: #c55b4d; }
-.theme-sanctuary, .theme-sanctuary body { background: #03130b; }
-.theme-sanctuary .sanct { display: block; position: fixed; inset: 0; background: linear-gradient(#00120970,#00120970), url(backgrounds/vespers.webp) center/cover; color: var(--ink); pointer-events: none; font-family: "Cormorant Garamond", Georgia, serif; font-variant-numeric: lining-nums; }
+.theme-sanctuary { --gold: #c8a45c; --ink: #ece6da; --mute: #8d8577; --red: #b8402f; --frost: rgba(255,240,215,.045); --edge: rgba(255,235,200,.10); }
+.theme-sanctuary, .theme-sanctuary body { background: #07080a; }
+.theme-sanctuary .sanct { display: block; position: fixed; inset: 0; background: #07080a; color: var(--ink); pointer-events: none; font-family: "Cormorant Garamond", Georgia, serif; }
+/* the vault, faint, and a shade so the left side stays dark enough to read */
+.theme-sanctuary .sanct::before { content: ""; position: absolute; inset: 0; background: url(backgrounds/vespers.webp) center / cover; opacity: .4; filter: saturate(.7); }
+.sa-left { position: absolute; inset: 0; background: linear-gradient(90deg, #07080a 0%, rgba(7,8,10,.82) 45%, rgba(7,8,10,.35) 100%); }
 .theme-sanctuary .scenes, .theme-sanctuary .bg, .theme-sanctuary .scrim, .theme-sanctuary .shelf,
 .theme-sanctuary .hero, .theme-sanctuary .time, .theme-sanctuary .date, .theme-sanctuary .place, .theme-sanctuary .top-left { display: none !important; }
+.cap { font: 500 1rem/1 Inter, sans-serif; letter-spacing: .32em; text-transform: uppercase; color: #a79f90; }
+.orn { display: flex; align-items: center; gap: .9rem; color: var(--gold); font: 1.1rem/1 Inter, sans-serif; }
+.orn::before, .orn::after { content: ""; height: .07rem; width: 7.5rem; background: linear-gradient(90deg, transparent, var(--gold)); }
+.orn::after { background: linear-gradient(90deg, var(--gold), transparent); }
+
+/* quick buttons */
 .theme-sanctuary .top { position: fixed; top: 2.6rem; right: 3.25rem; left: auto; z-index: 2; }
-.theme-sanctuary .qbtn { min-width: 4.75rem; height: 4.75rem; padding: 0 1rem; border-radius: 50%; background: transparent; color: var(--ink); border: .1rem solid var(--gold); backdrop-filter: none; box-shadow: none; }
-.theme-sanctuary .qbtn svg { width: 2.25rem; height: 2.25rem; }
-.theme-sanctuary .qbtn.focus { background: #80602155; color: var(--ink); box-shadow: 0 0 0 .15rem #ffe58e, 0 0 1rem #e6bb4d55; }
-.sa-left { position: absolute; inset: 0; }
-.sa-time { position: absolute; top: .5rem; left: 3.5rem; font-size: 8rem; line-height: 1; font-weight: 500; white-space: nowrap; }
-.sa-date { position: absolute; left: 4rem; top: 8.2rem; font-size: 2rem; }
-.sa-season { position: absolute; left: 36rem; right: 32rem; top: 4rem; text-align: center; font-size: 1.9rem; }
-.sa-season i { display: inline-block; width: 1rem; height: 1rem; margin-right: 1rem; border-radius: 50%; background: var(--dot); }
-.sa-season .sep { margin: 0 .5rem; }
-.sa-feast { position: absolute; left: 94rem; right: 3rem; top: 26rem; font-size: 2.5rem; line-height: 1.2; }
-.sa-wx { position: absolute; left: 94rem; right: 2rem; top: 33.5rem; font-size: 2rem; }
-.sa-train { position: absolute; top: 11.8rem; left: 2rem; right: 2rem; height: 6.6rem; display: flex; align-items: center; border: .1rem solid var(--gold); border-radius: .6rem; background: #00100866; }
+.theme-sanctuary .qbtn { position: relative; margin-left: 1.8rem; min-width: 4.5rem; height: 4.5rem; padding: 0 1rem; border-radius: 50%; background: var(--frost); color: var(--ink); border: .07rem solid rgba(200,164,92,.45); backdrop-filter: none; box-shadow: none; }
+.theme-sanctuary .qbtn svg { width: 2.1rem; height: 2.1rem; }
+.theme-sanctuary .qbtn span { display: block; position: absolute; top: 5.2rem; left: 50%; transform: translateX(-50%); font: 400 1.05rem Inter, sans-serif; color: var(--mute); white-space: nowrap; }
+.theme-sanctuary .qbtn.focus { background: rgba(200,164,92,.16); border-color: var(--gold); box-shadow: 0 0 0 .07rem var(--gold), 0 0 2.5rem rgba(200,164,92,.25); }
+.theme-sanctuary .qbtn.focus span { color: var(--ink); }
+
+/* clock, date, verse */
+.sa-time { position: absolute; left: 9.4rem; top: 4.2rem; font: italic 300 10.6rem/1 "Cormorant Garamond", Georgia, serif; white-space: nowrap; }
+.sa-time i { color: var(--gold); }
+.sa-orn { position: absolute; left: 9.75rem; top: 15.6rem; }
+.sa-date { position: absolute; left: 9.75rem; top: 18.4rem; }
+.sa-verse { position: absolute; left: 9.4rem; top: 22rem; width: 53.75rem; font: 400 2.6rem/1.32 "Cormorant Garamond", Georgia, serif; color: #d8cdb6; }
+.sa-verse::first-letter { float: left; font: 600 7.75rem/.8 "Cormorant Garamond", Georgia, serif; color: var(--red); margin: .6rem .9rem 0 0; }
+.sa-verse b { display: block; clear: left; padding-top: 1rem; color: var(--red); font: 500 .95rem/1 Inter, sans-serif; letter-spacing: .3em; text-transform: uppercase; }
+.sa-verse.long { font-size: 2.2rem; }
+
+/* the season's window, and what is coming under it */
+.sa-arch { position: absolute; right: 9.4rem; top: 10.6rem; width: 26rem; height: 37.5rem; }
+.sa-arch img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 0 5.6rem rgba(200,150,70,.38)); }
+.sa-under { position: absolute; right: 7rem; width: 31rem; top: 49.4rem; text-align: center; }
+.sa-feast { font: italic 400 1.9rem/1.2 "Cormorant Garamond", Georgia, serif; color: #d8cdb6; }
+.sa-wx { margin-top: .5rem; font: 300 1.2rem/1.4 Inter, sans-serif; color: var(--mute); }
+
+/* the train: one instruction, in a sentence */
+.sa-train { position: absolute; left: 9.4rem; top: 36.6rem; display: flex; align-items: center; gap: 1.6rem; }
 .sa-train:empty { display: none; }
-.sa-train.go { border-color: #e7c46a; box-shadow: 0 0 .65rem #dcbb4544; }
-.sa-line { width: 31%; display: flex; align-items: center; gap: 1.8rem; padding-left: 5.8rem; font-size: 2.25rem; white-space: nowrap; }
-.sa-train .bullet { width: 4.4rem; height: 4.4rem; flex: none; background: #00983b; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 600 3rem Inter, sans-serif; }
-.sa-depart { flex: 1; border-left: .1rem solid var(--gold); padding: 0 2.3rem; font-size: 3.25rem; white-space: nowrap; }
-.sa-go { display: inline-block; margin-left: 1rem; padding: .5rem 1.1rem; border-radius: 2rem; color: #201909; background: #d4aa47; font-size: 1.55rem; vertical-align: middle; }
-.sa-next { min-width: 22%; padding: 0 2.6rem; border-left: .1rem solid var(--gold); font-size: 1.9rem; line-height: 1.1; }
-.sa-verse { position: absolute; left: 8rem; top: 21rem; width: 52rem; font-size: 5rem; line-height: 1; }
-.sa-verse b { display: block; margin-top: 1.25rem; font-size: 2.3rem; font-weight: 400; }
-.sa-arch { position: absolute; left: 69rem; top: 19rem; width: 22.5rem; height: 21.5rem; }
-.sa-arch img { width: 100%; height: 100%; object-fit: contain; }
-.sa-house { position: absolute; left: 2rem; right: 2rem; top: 41.4rem; display: flex; gap: .9rem; }
-.sa-tile { position: relative; flex: 1; min-width: 0; height: 12.3rem; border: .1rem solid var(--gold); border-radius: .45rem; background: var(--glass); padding: 1.8rem 2.6rem; }
-.sa-tile .k { font-size: 2.25rem; line-height: 1.1; }
-.sa-tile .k svg { display: block; width: 3.4rem; height: 3.4rem; margin-bottom: .8rem; }
-.sa-tile svg, .sa-setting svg, .sa-act svg { fill: none; stroke: #efdda2; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
-.sa-tile .v { font-size: 1.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sa-tile .v.tight { font-size: 1.45rem; }
+.sa-train .bullet { width: 3.6rem; height: 3.6rem; flex: none; background: #00933c; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 600 2.25rem/1 Inter, sans-serif; }
+.sa-leave { font: italic 400 3.1rem/1 "Cormorant Garamond", Georgia, serif; }
+.sa-leave em { font-style: italic; color: var(--gold); }
+.sa-for { margin-top: .5rem; font: 300 1.4rem/1.4 Inter, sans-serif; color: #cfc6b6; }
+.sa-for b { font-weight: 500; color: var(--ink); }
+.sa-then { font: 300 1.15rem/1.4 Inter, sans-serif; color: var(--mute); }
+.sa-train.go .sa-leave { color: var(--gold); text-shadow: 0 0 1.5rem rgba(200,164,92,.45); }
+.sa-train.go .bullet { box-shadow: 0 0 0 .2rem rgba(200,164,92,.6); }
+
+/* the house: one frosted panel, the doorbell picture beside it */
+.sa-house { position: absolute; left: 9.4rem; top: 45.6rem; height: 7.6rem; display: flex; }
+.sa-tile { position: relative; height: 100%; padding: 1.35rem 1.4rem; background: var(--frost); border: .07rem solid var(--edge); border-width: .07rem 0; backdrop-filter: blur(1.5rem); font: 400 1.15rem/1.55 Inter, sans-serif; color: var(--mute); white-space: nowrap; }
+.sa-tile.first { border-left-width: .07rem; border-radius: 1.1rem 0 0 1.1rem; padding-left: 2.1rem; }
+.sa-tile.end { border-right-width: .07rem; border-radius: 0 1.1rem 1.1rem 0; padding-right: 2.1rem; }
+.sa-tile.first.end { border-radius: 1.1rem; }
+.sa-tile .v { display: block; max-width: 13rem; overflow: hidden; text-overflow: ellipsis; color: var(--ink); font-size: 1.4rem; }
+.sa-tile .v.tight { font-size: 1.15rem; padding-top: .25rem; }
 .sa-tile.warn .v { color: #e6c780; }
-.sa-tile.doorbell { flex: 1.85; padding-left: 16.5rem; }
-.sa-thumb { position: absolute; top: 1rem; bottom: 1rem; left: 3.6rem; width: 10.25rem; overflow: hidden; border: .1rem solid var(--gold); border-radius: .45rem; background: #08160f; }
-.sa-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.sa-tile.doorbell { width: 12.25rem; margin-left: 1.4rem; padding: 0; overflow: hidden; border-width: .07rem; border-radius: 1.1rem; }
+.sa-thumb, .sa-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sa-thumb { background: #101114; }
+.sa-thumb img { opacity: .9; }
 .sa-thumb img:not(.ok), #sa-cam-img:not(.ok) { visibility: hidden; }
-.sa-thumb span { position: absolute; bottom: 0; left: 0; right: 0; background: #000b; text-align: center; font-size: 1.3rem; }
+.sa-thumb span { position: absolute; left: .65rem; bottom: .5rem; font: 500 .8rem/1 Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); text-shadow: 0 0 .4rem #000; }
+.sa-thumb span::before, .sa-cam-live::before { content: ""; display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; background: #e2554d; margin-right: .45rem; vertical-align: .07rem; }
+.sa-tile.focus { background: rgba(200,164,92,.13); color: #c9bfae; box-shadow: inset 0 -.15rem 0 var(--gold); }
+.sa-tile.doorbell.focus { border-color: var(--gold); box-shadow: 0 0 0 .07rem var(--gold), 0 0 2.5rem rgba(200,164,92,.25); }
 .sa-house.old .sa-tile { opacity: .5; }
-.sa-old { position: absolute; top: 100%; font-size: 1.5rem; }
-.sa-tile.focus, .sa-setting.focus, .sa-btn.focus, .sa-cam button.focus { border-color: #ffe385; box-shadow: 0 0 0 .13rem #ffe385, 0 0 1rem #f8cc4f44; }
+.sa-old { position: absolute; top: 100%; left: 0; margin-top: .4rem; font: 1.05rem Inter, sans-serif; color: var(--mute); }
+
+/* the dock of apps */
 .theme-sanctuary .apps { bottom: 4.7rem; }
 .theme-sanctuary .grid { padding: 0; background: transparent; border-radius: 0; box-shadow: none; backdrop-filter: none; column-gap: 2.8rem; }
-.theme-sanctuary .app .face { border-radius: .3rem; }
+.theme-sanctuary .app .face { border-radius: .9rem; }
 .theme-sanctuary .app .face.art img { width: 100%; height: 100%; object-fit: cover; }
 .theme-sanctuary .app:not(.focus) .face img { filter: none; }
 .theme-sanctuary .app.focus { transform: scale(1.05); }
-.theme-sanctuary .app.focus .face { box-shadow: 0 0 0 .2rem #ffe385, 0 0 1rem #ffe38555; }
-.theme-sanctuary .app .label { color: var(--ink); font: 1.65rem "Cormorant Garamond", Georgia, serif; top: calc(100% + .6rem); }
-.sa-title { display: none; position: absolute; top: 1rem; left: 3.5rem; font-size: 8rem; line-height: 1; }
-.theme-sanctuary.expanded .sa-title, .settings-open .sa-title { display: block; }
-.theme-sanctuary.expanded .sa-time, .settings-open .sa-time,
-.theme-sanctuary.expanded .sa-verse, .settings-open .sa-verse,
-.theme-sanctuary.expanded .sa-arch, .settings-open .sa-arch,
-.theme-sanctuary.expanded .sa-house, .settings-open .sa-house,
-.theme-sanctuary.expanded .sa-wx, .settings-open .sa-wx,
-.theme-sanctuary.expanded .sa-feast, .settings-open .sa-feast { display: none; }
-.theme-sanctuary.expanded .sa-date, .settings-open .sa-date { left: 37rem; top: 3rem; }
-.theme-sanctuary.expanded .sa-season, .settings-open .sa-season { left: 37rem; right: 31rem; top: 6rem; text-align: left; }
-.theme-sanctuary.expanded .apps { top: 19rem; bottom: 1rem; left: 13rem; right: 13rem; transform: none; overflow-y: auto; scrollbar-width: none; padding: .8rem 1rem 2rem; }
+.theme-sanctuary .app.focus .face { box-shadow: 0 0 0 .1rem var(--gold), 0 0 0 .45rem #07080a, 0 0 0 .52rem rgba(200,164,92,.6), 0 0 2.5rem rgba(200,164,92,.25); }
+.theme-sanctuary .app .label { opacity: 1; color: var(--mute); font: 400 1.05rem Inter, sans-serif; top: calc(100% + .7rem); }
+.theme-sanctuary .app.focus .label { color: var(--ink); }
+
+/* All apps and Settings: an italic title with the gold rule, the window dimmed */
+.sa-title { display: none; position: absolute; left: 9.4rem; top: 4.4rem; font: italic 300 6rem/1 "Cormorant Garamond", Georgia, serif; }
+.sa-title-orn { display: none; position: absolute; left: 9.75rem; top: 11.6rem; }
+.theme-sanctuary.expanded .sa-title, .settings-open .sa-title,
+.theme-sanctuary.expanded .sa-title-orn, .settings-open .sa-title-orn { display: block; }
+.theme-sanctuary.expanded .sa-title-orn, .settings-open .sa-title-orn { display: flex; }
+.theme-sanctuary.expanded .sa-time, .settings-open .sa-time, .theme-sanctuary.expanded .sa-orn, .settings-open .sa-orn,
+.theme-sanctuary.expanded .sa-date, .settings-open .sa-date, .theme-sanctuary.expanded .sa-verse, .settings-open .sa-verse,
+.theme-sanctuary.expanded .sa-train, .settings-open .sa-train, .theme-sanctuary.expanded .sa-house, .settings-open .sa-house,
+.theme-sanctuary.expanded .sa-under, .settings-open .sa-under, .theme-sanctuary.expanded .sa-arch { display: none; }
+.settings-open .sa-arch img { filter: drop-shadow(0 0 3.75rem rgba(200,150,70,.2)) brightness(.45); }
+.theme-sanctuary.expanded .apps { top: 16rem; bottom: 1rem; left: 9.4rem; right: 9.4rem; transform: none; overflow-y: auto; scrollbar-width: none; padding: .8rem 1rem 2rem; }
 .theme-sanctuary.expanded .apps::-webkit-scrollbar { display: none; }
-.theme-sanctuary.expanded .grid { justify-content: space-between; grid-auto-rows: 12rem; row-gap: .7rem; }
-.theme-sanctuary.expanded .app { width: 10.5rem; height: 9rem; }
+.theme-sanctuary.expanded .grid { justify-content: space-between; grid-auto-rows: 11.25rem; row-gap: .3rem; }
+.theme-sanctuary.expanded .app { width: 10.5rem; height: 8.75rem; scroll-margin-bottom: 2.2rem; }
+.theme-sanctuary.expanded .app .face { background: transparent; }
 .theme-sanctuary.expanded .app .face.art img { object-fit: contain; }
 .theme-sanctuary.expanded .hint { display: none; }
-.sa-settings { display: none; position: absolute; inset: 22rem 3.2rem 5.4rem; grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(2,1fr); gap: 1.5rem 1.2rem; }
+
+.sa-settings { display: none; position: absolute; left: 9.4rem; top: 17.5rem; grid-template-columns: repeat(4, 16.9rem); grid-auto-rows: 12.5rem; gap: 1.4rem; }
 .settings-open .sa-settings { display: grid; }
 .settings-open .apps, .camera-open .apps { display: none; }
-.sa-setting { border: .1rem solid var(--gold); border-radius: .5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; background: #00100844; font-size: 3.2rem; }
-.sa-setting svg { width: 8rem; height: 8rem; }
-.sa-toast { display: none; position: absolute; top: 1rem; left: 36rem; padding: 1rem 2rem; background: #152c1c; border: .1rem solid var(--gold); border-radius: .5rem; font-size: 2rem; z-index: 6; }
+.sa-setting { border-radius: 1.1rem; background: var(--frost); border: .07rem solid var(--edge); backdrop-filter: blur(1.5rem); padding: 1.9rem 1.6rem; display: flex; flex-direction: column; justify-content: space-between; }
+.sa-setting svg { width: 2.9rem; height: 2.9rem; }
+.sa-setting span { font: 400 1.65rem/1.1 "Cormorant Garamond", Georgia, serif; }
+.sa-setting small { display: block; margin-top: .4rem; font: 400 .95rem/1.3 Inter, sans-serif; color: var(--mute); }
+.sa-hint { display: none; position: absolute; left: 9.75rem; bottom: 4.4rem; font: 400 1.15rem/1 Inter, sans-serif; color: var(--mute); }
+.settings-open .sa-hint { display: block; }
+.sa-setting svg, .sa-act svg { fill: none; stroke: #e6d3a6; stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+
+/* focus everywhere else: a gold edge and a soft glow */
+.sa-setting.focus, .sa-btn.focus, .sa-cam button.focus { border-color: var(--gold); box-shadow: 0 0 0 .07rem var(--gold), 0 0 2.5rem rgba(200,164,92,.2); }
+
+/* the doorbell ringing */
+.sa-toast { display: none; position: absolute; top: 2.6rem; left: 50%; transform: translateX(-50%); padding: 1.2rem 2.2rem; background: rgba(20,18,15,.88); border: .07rem solid var(--gold); border-radius: 1.1rem; font: italic 400 2rem/1.2 "Cormorant Garamond", Georgia, serif; z-index: 6; text-align: center; }
 .sa-toast.on { display: block; }
-.sa-toast b { display: block; font-size: 1.6rem; font-weight: 400; }
-.sa-cam { display: none; position: absolute; left: 2.8rem; right: 2.8rem; top: 19.4rem; height: 34.2rem; z-index: 4; background: #04150ce8; }
-.sa-cam.on { display: flex; gap: 3.3rem; }
-.sa-cam > img { width: 65%; height: 100%; object-fit: cover; border: .1rem solid var(--gold); border-radius: 48% 48% .3rem .3rem / 16% 16% .3rem .3rem; }
-.sa-cam-side { flex: 1; padding-top: 1.5rem; }
-.sa-cam h2 { font-weight: 500; font-size: 3.6rem; white-space: nowrap; }
-.sa-cam p { font-size: 2rem; margin: .3rem 0 1.5rem; }
-.sa-cam-buttons { display: flex; gap: 1.5rem; }
-.sa-cam button { flex: 1; padding: 1.6rem .5rem; color: var(--ink); font: 2.2rem "Cormorant Garamond", serif; background: transparent; border: .1rem solid var(--gold); border-radius: .5rem; }
-#sa-cam-verse { border-top: .1rem solid var(--gold); border-bottom: .1rem solid var(--gold); margin: 1.6rem 0 1rem; padding: 1rem; font-size: 2.5rem; line-height: 1.1; }
-#sa-cam-verse b { display: block; font-size: 2rem; margin-top: .7rem; font-weight: 400; }
-#sa-cam-weather { font-size: 2rem; }
-.camera-open .sa-house { top: 55.3rem; }
-.camera-open .sa-tile { height: 10.4rem; padding-top: 1rem; }
-.camera-open .sa-verse, .camera-open .sa-arch, .camera-open .sa-feast, .camera-open .sa-wx { visibility: hidden; }
-.sa-act { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; background: #0009; z-index: 5; }
+.sa-toast b { display: block; margin-top: .3rem; font: 400 1.1rem Inter, sans-serif; color: var(--mute); }
+
+/* the doorbell, opened: the picture large, a quiet column beside it */
+.sa-cam { display: none; position: absolute; inset: 0; z-index: 4; }
+.sa-cam.on { display: block; }
+.sa-cam > img { position: absolute; left: 9.4rem; top: 9.4rem; width: 70rem; height: 43.75rem; object-fit: cover; border-radius: 1.4rem; border: .07rem solid rgba(255,235,200,.14); background: #101114; }
+.sa-cam-live { position: absolute; left: 10.9rem; top: 10.8rem; padding: .55rem 1rem; border-radius: 2rem; background: rgba(0,0,0,.45); font: 500 .95rem/1 Inter, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+.sa-cam-side { position: absolute; left: 84.4rem; top: 10.6rem; width: 26.9rem; }
+.sa-cam h2 { font: italic 300 4.9rem/1 "Cormorant Garamond", Georgia, serif; white-space: nowrap; }
+.sa-cam .orn { margin: 1rem 0 1.4rem; }
+.sa-cam p { font: 400 1.25rem/1.6 Inter, sans-serif; color: var(--mute); }
+.sa-cam-buttons { display: flex; flex-direction: column; }
+.sa-cam button { margin-top: 1.6rem; height: 5.25rem; padding: 0 1.9rem; text-align: left; color: var(--ink); font: 400 1.9rem/1 "Cormorant Garamond", Georgia, serif; background: var(--frost); border: .07rem solid rgba(255,235,200,.12); border-radius: 1rem; }
+.camera-open .sa-left > *, .camera-open .sa-arch, .camera-open .sa-under, .camera-open .sa-house, .camera-open .sa-title,
+.camera-open .sa-title-orn, .camera-open .sa-settings, .camera-open .top { visibility: hidden; }
+
+.camera-open .sanct::before { opacity: .2; }
+
+/* a house tile, opened */
+.sa-act { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; background: rgba(4,5,6,.7); z-index: 5; }
 .sa-act.on { display: flex; }
-.sa-act-box { min-width: 36rem; max-width: 90rem; padding: 3rem; border: .1rem solid var(--gold); border-radius: .5rem; background: #091d11; }
-.sa-act-box .k { font-size: 2.4rem; }
-.sa-act-box svg { width: 3rem; height: 3rem; vertical-align: middle; margin-right: 1rem; }
-.sa-act-box .v { font-size: 3.5rem; }
-.sa-act-btns { display: flex; gap: 1.5rem; margin-top: 2rem; }
-.sa-btn { padding: 1rem 2rem; border: .1rem solid var(--gold); border-radius: .4rem; font-size: 2rem; }
-.sa-act-note, .sa-act-none { margin-top: 1.5rem; font-size: 1.8rem; }
-.theme-sanctuary .qbtn { position: relative; margin-left: 1.8rem; }
-.theme-sanctuary .qbtn span { display: block; position: absolute; top: 5.4rem; left: 50%; transform: translateX(-50%); font: 1.65rem "Cormorant Garamond", serif; white-space: nowrap; }
-.theme-sanctuary .app .label { opacity: 1; }
-.theme-sanctuary .sanct { background-image: linear-gradient(#001209a0,#001209a0), url(backgrounds/vespers.webp); }
-.sa-tile { flex-basis: 0; padding-right: 1rem; }
-.sa-tile.doorbell { flex: 1.8 1 0; padding-left: 15rem; }
-.sa-cam-side { display: flex; flex-direction: column; min-width: 0; }
-#sa-cam-verse { font-size: 2.15rem; margin: 1.25rem 0 1rem; padding: 1rem; }
-#sa-cam-weather { font-size: 1.85rem; }
-.camera-open .sa-tile.focus { box-shadow: none; border-color: var(--gold); }
-.theme-sanctuary.expanded .app { height: 9.5rem; }
-.theme-sanctuary.expanded .app .face { background: transparent; }
-.sa-verse.long { font-size: 4.1rem; line-height: 1.05; }
-.theme-sanctuary.expanded .grid { grid-auto-rows: 11.25rem; row-gap: .3rem; }
-.theme-sanctuary.expanded .app { height: 8.75rem; scroll-margin-bottom: 2.2rem; }
-.theme-sanctuary.expanded.camera-open .sa-house { display: flex; }
+.sa-act-box { min-width: 36rem; max-width: 90rem; padding: 2.8rem 3.2rem; border: .07rem solid var(--edge); border-radius: 1.4rem; background: rgba(22,20,17,.92); }
+.sa-act-box .k { font: italic 300 3.6rem/1 "Cormorant Garamond", Georgia, serif; }
+.sa-act-box .k svg { width: 2.6rem; height: 2.6rem; vertical-align: middle; margin-right: 1rem; }
+.sa-act-box .v { margin-top: 1rem; font: 300 1.6rem Inter, sans-serif; color: #cfc6b6; }
+.sa-act-btns { display: flex; gap: 1.2rem; margin-top: 2rem; }
+.sa-btn { padding: 1.1rem 2rem; border: .07rem solid rgba(255,235,200,.12); border-radius: 1rem; background: var(--frost); font: 400 1.9rem/1 "Cormorant Garamond", Georgia, serif; }
+.sa-act-note, .sa-act-none { margin-top: 1.5rem; font: 1.1rem Inter, sans-serif; color: var(--mute); }
