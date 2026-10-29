@@ -102,6 +102,11 @@ class MainActivity : Activity() {
         web?.resumeTimers()
     }
 
+    override fun onPause() {
+        js("window.tv && tv.pause()")
+        super.onPause()
+    }
+
     override fun onStop() {
         web?.pauseTimers()
         web?.onPause()
@@ -409,7 +414,20 @@ class MainActivity : Activity() {
         fun launch(pkg: String): Boolean = launchPackage(pkg)
 
         @JavascriptInterface
-        fun openSettings(): Boolean = start(Intent(Settings.ACTION_SETTINGS))
+        fun openSettings(id: String): Boolean {
+            val intent = when (id) {
+                "wifi" -> Intent(Settings.ACTION_WIFI_SETTINGS)
+                "picture" -> Intent(Settings.ACTION_DISPLAY_SETTINGS)
+                "sound" -> Intent("com.android.tv.action.VIEW_SOUND_SETTINGS")
+                "inputs" -> inputsIntent() ?: return false
+                "bluetooth" -> Intent("com.android.tv.settings.ACCESSORIES_CONNECTED_DEVICES")
+                "sleep" -> Intent("com.android.tv.settings.action.ENERGY_SAVING")
+                "all" -> Intent(Settings.ACTION_SETTINGS)
+                else -> return false
+            }
+            if (packageManager.resolveActivity(intent, 0) == null) return false
+            return start(intent)
+        }
 
         @JavascriptInterface
         fun version(): String = BuildConfig.VERSION_NAME

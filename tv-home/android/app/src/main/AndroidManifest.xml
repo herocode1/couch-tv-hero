@@ -18,6 +18,13 @@
         <intent><action android:name="com.android.tv.action.VIEW_INPUTS" /></intent>
         <intent><action android:name="com.google.android.tv.action.VIEW_INPUTS" /></intent>
         <intent><action android:name="android.media.tv.action.SETUP_INPUTS" /></intent>
+        <!-- Fixed settings destinations exposed by Native.openSettings. -->
+        <intent><action android:name="android.settings.WIFI_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.DISPLAY_SETTINGS" /></intent>
+        <intent><action android:name="com.android.tv.action.VIEW_SOUND_SETTINGS" /></intent>
+        <intent><action android:name="com.android.tv.settings.ACCESSORIES_CONNECTED_DEVICES" /></intent>
+        <intent><action android:name="com.android.tv.settings.action.ENERGY_SAVING" /></intent>
+        <intent><action android:name="android.settings.SETTINGS" /></intent>
     </queries>
 
     <application

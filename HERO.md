@@ -85,7 +85,7 @@ Home Assistant writes the feed whenever something on it changes, and every minut
 ```json
 {
   "updated": 1793082000,
-  "train": { "line": "5", "stop": "Station name", "next": 9.6, "after": 29.6, "leave_in": 2.6 },
+  "train": { "line": "5", "stop": "Station name", "times": [11, 19, 27], "walk": 7, "leave_in": 4, "leave_now": false },
   "doorbell": { "last": 1793081000 },
   "tiles": [
     { "kind": "lock", "name": "Front door", "value": "Locked", "ok": true },
@@ -96,7 +96,14 @@ Home Assistant writes the feed whenever something on it changes, and every minut
 ```
 
 - `updated` and `doorbell.last` are Unix seconds. Train minutes count from `updated`, and the TV
-  counts them down itself.
+  counts them down itself. `train.times` is an ascending array of arrival minutes from `updated`,
+  containing only trains catchable when the feed was written (arrival >= `walk`). `walk` is the
+  walk in minutes. `leave_in` is minutes from `updated` until departure; if omitted, it is the
+  first arrival minus `walk`. `leave_now` requests the soft amber "Time to go" badge. The badge
+  also appears when the departure countdown reaches zero. Once an arrival has passed, the TV
+  selects the next arrival and recalculates departure as arrival minus `walk`; an old
+  `leave_now` flag does not carry over. The departure and next two arrivals use the TV's 12/24h
+  clock setting. Older feeds with `next`, `after`, and `leave_in` still work.
 - `ok` colours a tile: `true` green, `false` amber, left out plain.
 - `kind` picks the tile's icon: `lock`, `unlock`, `garage`, `temp`, `light`, `bell` or `home`.
 - The house tiles go grey when the feed is more than 10 minutes old.
@@ -143,3 +150,29 @@ handles itself (it shows the doorbell snapshot). Action ids are lowercase letter
 - In Home Assistant, a webhook trigger with `allowed_methods: [POST]` and `local_only: true`, then
   a `choose` on `trigger.json.action` with one branch per id. An unknown id does nothing. Run the
   feed automation again at the end so the tile shows the new state.
+
+### B1 Vespers (1.4.0-hero)
+
+Sanctuary uses the faint `backgrounds/vespers.webp` vault, the existing seasonal arch and app
+art, Cormorant type and thin gold focus outlines. Night, Classic and the scene looks remain
+available through Home look. The Photos quick button cycles to the scene look using the same
+look switch. Utility apps stay behind More apps unless explicitly arranged onto the dock.
+More apps uses five columns and scrolls by remote focus, with the App Store first.
+
+The Settings tile opens eight in-home choices: Wi-Fi, Picture, Sound, Inputs, Bluetooth,
+Display & Sleep, Home look and All settings. Only those fixed native ids are accepted; a
+missing destination falls back to All settings. Home look uses the existing look switch.
+
+The Doorbell tile shows a small `LIVE` preview from `/ha/doorbell`, refreshed every 30 seconds
+while home is visible. OK opens the large camera with Open Protect focused first and Close
+beside it; BACK closes it. Open Protect launches `com.ubnt.unifi.protect`.
+Opening the camera sends `doorbell_live` once through `/ha/do/doorbell_live` (POST), using the
+same safe house-action webhook. Map that action in Home Assistant only to refreshing the
+camera snapshot or starting its safe live snapshot refresh, never to a lock or garage opener.
+The camera requests a cache-busted snapshot about once per second until closed. Polls and
+image timers stop on page hiding/native pause; images are reused and no token is sent to TV.
+
+Preview locally with `tv-home/web/index.html?mock=1&ha=1&people=0`. The mock includes the
+launchable apps, new train fields and a labelled synthetic doorbell image, with no camera
+network request. The actual TV app list remains authoritative (no Google Photos tile is
+invented for a package the TV cannot launch).

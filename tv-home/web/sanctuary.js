@@ -16,7 +16,9 @@
 
   var cfg = {}, clock24 = false, native = null, haOn = false;
   var feed = null, lastRing = null, toastTimer = null, pollTimer = null;
-  var weather = null;
+  var weather = null, active = true, tickTimer = null, imageTimer = null;
+  var pollEpoch = 0, actionTimer = null;
+  var camIndex = 0, settingsIndex = -1, lookToggle = null, thumbSrc = "";
   var hi = -1;                // the house tile with the focus, -1 when the focus is elsewhere
   var panel = null;           // the open tile: { name, ai (chosen action), busy, said }
   var ACT_ID = /^[a-z0-9_]{1,40}$/;
@@ -122,6 +124,7 @@
     "all-saints": ["Be glad and rejoice, for your reward is very great in heaven.", "Matthew 5:12"]
   };
   function verse(d, s) {
+    if (d.getMonth() === 9 && d.getDate() === 28) return VERSES[9];
     var n = daysBetween(day(2000, 1, 1), d);
     if (SEASON_VERSE[s.art] && n % 2 === 0) return SEASON_VERSE[s.art];
     return VERSES[((n % VERSES.length) + VERSES.length) % VERSES.length];
@@ -134,7 +137,12 @@
     "com.google.android.youtube.tvmusic": "youtube-music", "com.netflix.ninja": "netflix",
     "com.amazon.amazonvideo.livingroom": "prime-video", "com.disney.disneyplus": "disney-plus",
     "com.hulu.livingroomplus": "hulu", "com.wbd.stream": "max", "com.tubitv": "tubi", "com.cbs.ott": "paramount-plus",
-    "com.apple.atve.androidtv.appletv": "apple-tv", "com.android.tv.settings": "settings", "com.android.vending": "app-store"
+    "com.apple.atve.androidtv.appletv": "apple-tv", "com.android.tv.settings": "settings", "com.android.vending": "app-store",
+    "com.fox.foxone": "fox-one", "com.instagram.airwave": "instagram",
+    "com.nbcu.tve.telemundotv.androidtv": "telemundo", "com.ubnt.unifi.protect": "unifi-protect",
+    "com.eliotcougar.tclcompanion": "tv-companion", "com.shieldglow.tv": "shield-glow",
+    "com.tcl.dashboard": "dashboard", "com.tcl.suspension": "tv-rest", "com.tcl.tv": "live-tv",
+    "com.tcl.ui_mediaCenter": "media-center", "de.cyberdream.androidtv.notifications.google": "notifications"
   };
   var ICON_NAME = [
     [/^youtube tv/i, "youtube-tv"], [/^youtube music/i, "youtube-music"], [/^youtube/i, "youtube"],
@@ -145,7 +153,7 @@
   // the tiles there are in art/ (an app with none keeps its own icon)
   var TILES = ["youtube", "youtube-tv", "youtube-music", "netflix", "prime-video", "disney-plus", "hulu", "max",
     "tubi", "paramount-plus", "apple-tv", "fox-one", "telemundo", "instagram", "unifi-protect", "settings",
-    "app-store", "more-apps"];
+    "app-store", "more-apps", "tv-companion", "shield-glow", "dashboard", "tv-rest", "live-tv", "media-center", "notifications"];
   function icon(it) {
     var id = it.kind === "more" ? "more-apps" : ICON_PKG[it.package];
     if (!id) ICON_NAME.some(function (r) { if (r[0].test(it.name || "")) { id = r[1]; return true; } return false; });
@@ -167,12 +175,13 @@
     var el = document.createElement("div");
     el.className = "sanct";
     el.id = "sanct";
-    el.setAttribute("aria-hidden", "true");
+    el.setAttribute("aria-label", "Sanctuary home");
     el.innerHTML =
       '<div class="sa-left">' +
         '<div class="sa-time" id="sa-time"></div>' +
         '<div class="sa-date" id="sa-date"></div>' +
         '<div class="sa-season" id="sa-season"></div>' +
+        '<div class="sa-feast" id="sa-feast"></div>' +
         '<div class="sa-wx" id="sa-wx"></div>' +
         '<div class="sa-train" id="sa-train"></div>' +
         '<div class="sa-verse" id="sa-verse"></div>' +
@@ -181,7 +190,11 @@
       '<div class="sa-house" id="sa-house"></div>' +
       '<div class="sa-toast" id="sa-toast"><i></i><span>Someone is at the front door</span><b>Press OK for the camera</b></div>' +
       '<div class="sa-act" id="sa-act"></div>' +
-      '<div class="sa-cam" id="sa-cam"><img id="sa-cam-img" alt=""><p id="sa-cam-note"></p></div>';
+      '<div class="sa-cam" id="sa-cam"><img id="sa-cam-img" alt="Front door camera">' +
+        '<div class="sa-cam-side"><h2>&#9679; Front door &middot; Live</h2><p id="sa-cam-note"></p>' +
+        '<div class="sa-cam-buttons"><button>Open Protect</button><button>Close</button></div>' +
+        '<div id="sa-cam-verse"></div><div id="sa-cam-weather"></div></div></div>' +
+      '<div class="sa-settings" id="sa-settings"></div><div class="sa-title" id="sa-title"></div>';
     document.body.insertBefore(el, document.body.firstChild);
   }
 
@@ -193,16 +206,18 @@
   var shownDay = "";
   function tick() {
     var d = new Date();
-    $("sa-time").textContent = hm(d);
+    $("sa-time").textContent = hm(d) + (clock24 ? "" : d.getHours() < 12 ? " AM" : " PM");
+    $("sa-date").textContent = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) + " \u00b7 " + $("sa-time").textContent;
     var key = d.toDateString();
     if (key !== shownDay) {
       shownDay = key;
       var today = day(d.getFullYear(), d.getMonth() + 1, d.getDate());
       var s = season(today), f = nextFeast(today), v = verse(today, s);
       document.documentElement.className = document.documentElement.className.replace(/\btone-\w+/g, "").trim() + " tone-" + s.tone;
-      $("sa-date").textContent = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+      $("sa-feast").textContent = d.getMonth() === 9 && d.getDate() === 28 ? "Feast of Sts. Simon and Jude, Apostles" : s.name;
       $("sa-season").innerHTML = "<i></i>" + esc(s.name) + (f ? '<span class="sep">·</span>' + esc(f) : "");
-      $("sa-verse").innerHTML = "“" + esc(v[0]) + "”<b>" + esc(v[1]) + "</b>";
+      $("sa-verse").innerHTML = esc(v[0]) + "<b>\u2014 " + esc(v[1]) + "</b>";
+      $("sa-verse").classList.toggle("long", v[0].length > 100);
       $("sa-art").src = "art/arch-" + s.art + ".webp";
     }
     drawTrain();
@@ -218,18 +233,26 @@
 
   function fresh() { return feed && feed.updated && (Date.now() / 1000 - feed.updated) < STALE_S; }
 
+  function trainState(t, updated, now) {
+    var elapsed = Math.max(0, (now - updated) / 60), walk = Number(t.walk);
+    if (!isFinite(walk)) walk = t.next != null && t.leave_in != null ? t.next - t.leave_in : 0;
+    var times = Array.isArray(t.times) ? t.times.filter(function (n) { return typeof n === "number" && isFinite(n); }).sort(function (a, b) { return a - b; }) : [t.next, t.after].filter(function (n) { return typeof n === "number" && isFinite(n); });
+    var index = 0;
+    while (index < times.length && times[index] < elapsed) index++;
+    if (index === times.length) return null;
+    var leave = index === 0 && t.leave_in != null ? Number(t.leave_in) : times[index] - walk;
+    return { leave: leave - elapsed, by: updated + leave * 60, walk: walk,
+      times: times.slice(index, index + 2).map(function (n) { return updated + n * 60; }),
+      go: leave - elapsed <= 0 || (index === 0 && !!t.leave_now) };
+  }
   function drawTrain() {
-    var t = fresh() && feed.train, el = $("sa-train");
-    if (!t || t.next == null) { el.innerHTML = ""; return; }
-    // minutes as of now, not as of when Home Assistant wrote them
-    var gone = Math.max(0, (Date.now() / 1000 - feed.updated) / 60);
-    var next = Math.round(t.next - gone), leave = t.leave_in == null ? null : Math.round(t.leave_in - gone);
-    var html = '<span class="bullet">' + esc(t.line || "") + "</span>" + esc(t.stop || "") +
-      '<span class="sep">·</span>next train <b>' + Math.max(0, next) + " min</b>";
-    if (leave != null && leave > 0) html += '<span class="sep">·</span>leave in <b>' + leave + "</b>";
-    else if (leave != null && leave >= -1) html += '<span class="sep">·</span><b>leave now</b>';
-    else if (t.after != null) html += '<span class="sep">·</span>then <b>' + Math.max(0, Math.round(t.after - gone)) + " min</b>";
-    el.innerHTML = html;
+    var t = fresh() && feed.train, el = $("sa-train"), state = t && trainState(t, feed.updated, Date.now() / 1000);
+    if (!state) { el.innerHTML = ""; el.classList.remove("go"); return; }
+    el.classList.toggle("go", state.go);
+    el.innerHTML = '<div class="sa-line"><span class="bullet">' + esc(t.line) + '</span>' + esc(t.line) + ' train \u00b7 ' + esc(t.stop) + '</div>' +
+      '<div class="sa-depart">Leave by ' + hm(new Date(state.by * 1000)) + ' \u00b7 in ' + Math.max(0, Math.ceil(state.leave)) + ' min' +
+      (state.go ? '<span class="sa-go">Time to go</span>' : '') + '</div><div class="sa-next">' +
+      (state.times.length ? 'then ' + state.times.map(function (n) { return hm(new Date(n * 1000)); }).join(' \u00b7 ') + '<br>' : '') + esc(state.walk) + ' min walk</div>';
   }
 
   function houseTiles() { return haOn && feed && Array.isArray(feed.tiles) ? feed.tiles.slice(0, 5) : []; }
@@ -241,7 +264,7 @@
   }
 
   function drawHouse() {
-    var box = $("sa-house");
+    var box = $("sa-house"), oldThumb = $("sa-thumb-img");
     var tiles = houseTiles();
     if (!tiles.length) { box.innerHTML = ""; return; }
     var old = !fresh();
@@ -250,25 +273,32 @@
     box.innerHTML = tiles.map(function (t, i) {
       var g = GLYPH[t.kind] || GLYPH.home;
       return '<div class="sa-tile' + (t.ok === true ? " ok" : t.ok === false ? " warn" : "") +
-        (i === hi && !old ? " focus" : "") + '">' +
-        '<div class="k">' + g + esc(t.name) + '</div><div class="v">' + esc(old ? "…" : t.value) + "</div></div>";
+        (t.kind === "bell" ? " doorbell" : "") + (i === hi && !old ? " focus" : "") + '">' +
+        (t.kind === "bell" ? '<div class="sa-thumb"><img id="sa-thumb-img" alt="Front door"' + (thumbSrc ? ' class="ok" src="' + esc(thumbSrc) + '"' : '') + '><span>LIVE &middot; Front door</span></div>' : '') + '<div class="k">' + g + esc(t.name) + '</div><div class="v">' + esc(old ? "…" : t.value) + "</div></div>";
     }).join("") + (old ? '<p class="sa-old">Home Assistant is not answering</p>' : "");
+    if (oldThumb && $("sa-thumb-img")) $("sa-thumb-img").replaceWith(oldThumb);
+    // a long value ("Locked · Apt unlocked") gets smaller type rather than running past the card
+    Array.prototype.forEach.call(box.querySelectorAll(".v"), function (v) { if (v.scrollWidth > v.clientWidth) v.classList.add("tight"); });
   }
 
   // ---------------- Home Assistant ----------------
   function poll() {
     clearTimeout(pollTimer);
+    if (!active || document.hidden) return;
+    var ticket = ++pollEpoch;
     var get = window.MOCK_HA ? Promise.resolve(window.MOCK_HA()) :
       fetch(HA + "feed", { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
     get.then(function (j) {
       if (!j || typeof j !== "object") return;
+      if (!active || document.hidden || ticket !== pollEpoch) return;
       feed = j;
       drawTrain();
       drawHouse();
+      if (!imageTimer) refreshImages();
       if (panel && !panel.busy) drawPanel();
       checkRing();
     }, function () { drawHouse(); })
-      .then(function () { pollTimer = setTimeout(poll, POLL_MS); });
+      .then(function () { if (active && !document.hidden && ticket === pollEpoch) pollTimer = setTimeout(poll, POLL_MS); });
   }
 
   function checkRing() {
@@ -285,24 +315,85 @@
   function toast(on) {
     clearTimeout(toastTimer);
     $("sa-toast").classList.toggle("on", on);
-    if (on) toastTimer = setTimeout(function () { toast(false); }, TOAST_MS);
+    if (on && active && !document.hidden) toastTimer = setTimeout(function () { toast(false); }, TOAST_MS);
   }
   function toastOn() { return $("sa-toast").classList.contains("on"); }
   function camOn() { return $("sa-cam").classList.contains("on"); }
 
-  function openCam() {
-    toast(false);
-    var d = feed && feed.doorbell && feed.doorbell.last ? new Date(feed.doorbell.last * 1000) : null;
-    $("sa-cam-img").src = HA + "doorbell?t=" + Date.now();
-    $("sa-cam-note").textContent = (d ? "Front door at " + hm(d) : "Front door") + "  ·  Press OK or BACK to close";
-    $("sa-cam").classList.add("on");
+  function imageSource() { return window.MOCK_DOORBELL || HA + "doorbell?t=" + Date.now(); }
+  function homeVisible() { return active && !document.hidden && settingsIndex < 0 && (camOn() || !document.documentElement.classList.contains("expanded")); }
+  function refreshImages() {
+    clearTimeout(imageTimer); imageTimer = null;
+    if (!homeVisible() || !haOn) return;
+    var img = camOn() ? $("sa-cam-img") : $("sa-thumb-img");
+    if (img) {
+      var src = imageSource();
+      // swap the picture in only once it has loaded: no broken-image icon while Home Assistant has none yet
+      var next = new Image();
+      next.onload = function () { img.src = src; img.classList.add("ok"); if (img.id === "sa-thumb-img") thumbSrc = src; };
+      next.src = src;
+    }
+    imageTimer = setTimeout(refreshImages, camOn() ? 1000 : 30000);
   }
-  function closeCam() { $("sa-cam").classList.remove("on"); $("sa-cam-img").removeAttribute("src"); }
+  function sendAction(id) {
+    return window.MOCK_HA ? Promise.resolve() : fetch(HA + "do/" + id, { method: "POST", cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(r.status); });
+  }
+  function camFocus() {
+    Array.prototype.forEach.call($("sa-cam").querySelectorAll("button"), function (el, i) { el.classList.toggle("focus", i === camIndex); });
+  }
+  function openCam() {
+    if (camOn()) return;
+    toast(false); camIndex = 0;
+    var d = feed && feed.doorbell && feed.doorbell.last ? new Date(feed.doorbell.last * 1000) : null;
+    $("sa-cam-note").textContent = d ? "Last ring " + d.toLocaleDateString("en-US", { weekday: "short" }) + " " + hm(d) : "No recent ring";
+    $("sa-cam-verse").innerHTML = $("sa-verse").innerHTML;
+    $("sa-cam-weather").textContent = $("sa-feast").textContent + " \u00b7 " + $("sa-wx").textContent;
+    $("sa-cam").classList.add("on"); document.documentElement.classList.add("camera-open");
+    camFocus(); refreshImages();
+    sendAction("doorbell_live").catch(function () { if (camOn()) $("sa-cam-note").textContent = "Live refresh unavailable \u00b7 showing latest snapshot"; });
+  }
+  function closeCam() {
+    $("sa-cam").classList.remove("on"); document.documentElement.classList.remove("camera-open");
+    $("sa-cam-img").removeAttribute("src"); $("sa-cam-img").classList.remove("ok"); refreshImages();
+  }
+  var SETTINGS = [["wifi", "Wi-Fi", "M3 8q9-9 18 0M6 12q6-6 12 0M9 16q3-3 6 0M12 20h.01"],
+    ["picture", "Picture", "M3 3h18v18H3zM3 18l6-7 5 5 3-3 4 5M16 7h.01"],
+    ["sound", "Sound", "M3 9h4l6-5v16l-6-5H3zM17 7q5 5 0 10M20 4q7 8 0 16"],
+    ["inputs", "Inputs", "M10 3h11v18H10M2 12h14M11 7l5 5-5 5"],
+    ["bluetooth", "Bluetooth", "M7 6l12 12-7 5V1l7 5L7 18"],
+    ["sleep", "Display & Sleep", "M2 3h20v15H2zM12 18v4M7 22h10M13 6a4 4 0 1 0 3 7 5 5 0 0 1-3-7"],
+    ["look", "Home look", "M2 11L12 2l10 9M5 9v13h14V9M9 22v-8h6v8"],
+    ["all", "All settings", "M4 5h16v14H4zM8 2v6M16 16v6M2 12h6M16 12h6M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0"]];
+  function drawSettings() {
+    $("sa-settings").innerHTML = SETTINGS.map(function (x, i) {
+      return '<div class="sa-setting' + (i === settingsIndex ? ' focus' : '') + '"><svg viewBox="0 0 24 24"><path d="' + x[2] + '"/></svg><span>' + x[1] + '</span></div>';
+    }).join('');
+  }
+  function openSettings() { settingsIndex = 0; document.documentElement.classList.add("settings-open"); $("sa-title").textContent = "Settings"; drawSettings(); refreshImages(); }
+  function closeSettings() { settingsIndex = -1; document.documentElement.classList.remove("settings-open"); $("sa-title").textContent = "All apps"; refreshImages(); }
+  function settingOK() {
+    var id = SETTINGS[settingsIndex][0];
+    if (id === "look") { lookToggle(); return; }
+    if (native && native.openSettings && !native.openSettings(id)) native.openSettings("all");
+  }
+  function pause() {
+    active = false; pollEpoch++; clearTimeout(actionTimer);
+    clearTimeout(pollTimer); clearInterval(tickTimer); clearTimeout(imageTimer); imageTimer = null;
+    toast(false);
+  }
+  function resume() {
+    active = true; clearInterval(tickTimer);
+    if (document.hidden) return;
+    tick(); tickTimer = setInterval(tick, 15000);
+    if (haOn) poll(); refreshImages();
+  }
+  document.addEventListener("visibilitychange", function () { if (!$("sanct")) return; if (document.hidden) pause(); else resume(); });
 
   // ---------------- a tile, opened ----------------
   function houseOK() {
     var t = houseTiles()[hi];
     if (!t || !fresh()) return;
+    if (t.kind === "bell") { openCam(); return; }
     panel = { name: t.name, ai: 0, busy: false, said: "" };
     drawPanel();
     $("sa-act").classList.add("on");
@@ -333,15 +424,13 @@
     if (!a || panel.busy) return;
     if (a.id === "camera") { closePanel(); openCam(); return; }
     panel.busy = true; panel.said = "Sending…"; drawPanel();
-    var send = window.MOCK_HA ? Promise.resolve() :
-      fetch(HA + "do/" + a.id, { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(r.status); });
+    var send = sendAction(a.id);
     send.then(function () {
       if (!panel) return;
       panel.busy = false; panel.said = "Done"; drawPanel();
-      setTimeout(function () { if (panel && panel.said === "Done") closePanel(); }, 1500);
+      if (active && !document.hidden) actionTimer = setTimeout(function () { if (panel && panel.said === "Done") closePanel(); }, 1500);
       // Home Assistant writes the feed again when the lock, the garage or the AC changes
-      setTimeout(poll, 2000);
-      setTimeout(poll, 8000);
+      if (active && !document.hidden) { clearTimeout(pollTimer); pollTimer = setTimeout(poll, 2000); }
     }, function () {
       if (!panel) return;
       panel.busy = false; panel.said = "Home Assistant did not answer. Try again in a moment."; drawPanel();
@@ -350,25 +439,42 @@
 
   // Keys while the doorbell is up. Runs before app.js (capture), so the dock does not move under it,
   // and the OK that opened or closed the picture does not also reach app.js when it comes back up.
-  function isOk(e) { return e.key === "Enter" || e.keyCode === 13 || e.keyCode === 23; }
+  function isOk(e) { return ["Enter", " ", "Select", "Accept", "NumpadEnter"].indexOf(e.key) >= 0 || e.keyCode === 13 || e.keyCode === 23; }
   var swallowUp = false;
   window.addEventListener("keydown", function (e) {
     if (!document.documentElement.classList.contains("theme-sanctuary")) return;
+    var key = ({ Up: "ArrowUp", Down: "ArrowDown", Left: "ArrowLeft", Right: "ArrowRight" })[e.key] || e.key;
+    if (!key || key === "Unidentified") key = ({19:"ArrowUp",20:"ArrowDown",21:"ArrowLeft",22:"ArrowRight",37:"ArrowLeft",38:"ArrowUp",39:"ArrowRight",40:"ArrowDown"})[e.keyCode] || key;
+    if (["Escape", "Backspace", "BrowserBack", "GoBack"].indexOf(e.key) >= 0 && window.Sanctuary.back()) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+    if (settingsIndex >= 0) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (isOk(e)) { swallowUp = true; if (!e.repeat) settingOK(); }
+      else {
+        var col = settingsIndex % 4;
+        if (key === "ArrowLeft" && col > 0) settingsIndex--;
+        if (key === "ArrowRight" && col < 3) settingsIndex++;
+        if (key === "ArrowUp" && settingsIndex >= 4) settingsIndex -= 4;
+        if (key === "ArrowDown" && settingsIndex < 4) settingsIndex += 4;
+        drawSettings();
+      }
+      return;
+    }
     if (panelOn()) {
-      if (isOk(e) || /^Arrow/.test(e.key)) {
+      if (isOk(e) || /^Arrow/.test(key)) {
         e.preventDefault(); e.stopImmediatePropagation();
         if (isOk(e)) { swallowUp = true; if (!e.repeat) run(); }
-        else if (!panel.busy && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-          panel.ai = Math.max(0, panel.ai + (e.key === "ArrowLeft" ? -1 : 1));
+        else if (!panel.busy && (key === "ArrowLeft" || key === "ArrowRight")) {
+          panel.ai = Math.max(0, panel.ai + (key === "ArrowLeft" ? -1 : 1));
           panel.said = ""; drawPanel();
         }
       }
       return;
     }
     if (camOn()) {
-      if (isOk(e) || /^Arrow/.test(e.key)) {
+      if (key === "ArrowLeft" || key === "ArrowRight") { camIndex = key === "ArrowLeft" ? 0 : 1; camFocus(); }
+      if (isOk(e) || /^Arrow/.test(key)) {
         e.preventDefault(); e.stopImmediatePropagation();
-        if (isOk(e)) { swallowUp = true; if (!e.repeat) closeCam(); }
+        if (isOk(e)) { swallowUp = true; if (!e.repeat) { if (camIndex === 1) closeCam(); else if (native) native.launch("com.ubnt.unifi.protect"); } }
       }
       return;
     }
@@ -387,17 +493,17 @@
     start: function (o) {
       cfg = o.config || {};
       clock24 = !!o.clock24;
-      native = o.tv;
+      native = o.tv; lookToggle = o.toggleLook;
       haOn = !!((cfg.home || {}).ha) || !!window.MOCK_HA;
       build();
-      tick();
-      setInterval(tick, 15000);
-      if (haOn) poll();
+      resume();
     },
     weather: function (w) { weather = w; drawWeather(); },
-    resume: function () { if (haOn) poll(); tick(); },
+    resume: resume, pause: pause, openSettings: openSettings,
+    layout: function () { $("sa-title").textContent = settingsIndex >= 0 ? "Settings" : "All apps"; refreshImages(); },
     // BACK: true when it closed something here
     back: function () {
+      if (settingsIndex >= 0) { closeSettings(); return true; }
       if (camOn()) { closeCam(); return true; }
       if (panelOn()) { closePanel(); return true; }
       if (toastOn()) { toast(false); return true; }
@@ -405,7 +511,7 @@
     },
     // the house row, for app.js's focus: how many tiles can take it, which one has it, where they are
     houseCount: function () { return fresh() ? houseTiles().length : 0; },
-    houseFocus: function (i) { if (i !== hi) { hi = i; drawHouse(); } },
+    houseFocus: function (i) { hi = i; Array.prototype.forEach.call($("sa-house").children, function (el, n) { el.classList.toggle("focus", n === hi && fresh()); }); },
     houseX: function (i) { var el = $("sa-house").children[i]; if (!el) return 0; var b = el.getBoundingClientRect(); return b.left + b.width / 2; },
     houseNear: function (x) {
       var best = 0, bestD = Infinity, els = $("sa-house").children;
@@ -417,6 +523,6 @@
     },
     houseOK: houseOK,
     // for tests: the calendar on any day
-    _season: season, _nextFeast: nextFeast
+    _trainState: trainState, _season: season, _nextFeast: nextFeast
   };
 })();

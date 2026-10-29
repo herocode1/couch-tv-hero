@@ -45,15 +45,18 @@
   window.COUCH_CONFIG = cfg;
   if (arg("ha")) {
     var now = function () { return Math.floor(Date.now() / 1000); }, t0 = now();
+    cfg.home.look = cfg.home.look || "sanctuary";
+    cfg.tvs[0].quick = cfg.tvs[0].quick || ["look", "input"];
+    window.MOCK_DOORBELL = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#152b45"/><stop offset="1" stop-color="#687d86"/></linearGradient><radialGradient id="glow"><stop stop-color="#ffc45c" stop-opacity=".6"/><stop offset="1" stop-color="#ffc45c" stop-opacity="0"/></radialGradient></defs><path fill="url(#sky)" d="M0 0h960v540H0z"/><path fill="#172a20" d="M0 200l80-140 70 155 80-120 100 160 140-170 90 200v255H0z"/><path fill="#59534a" d="M580 0h380v540H580z"/><path fill="#35271e" d="M700 80h175v430H700z"/><path fill="#bb8a45" d="M720 110h130v150H720z"/><path fill="#322b24" d="M780 110h8v150h-8zM720 182h130v8H720z"/><circle cx="670" cy="160" r="170" fill="url(#glow)"/><path fill="#ffcb73" stroke="#332a20" stroke-width="8" d="M640 118h46v65h-46z"/><path fill="#777367" d="M380 330h200l120 210H170z"/><path fill="none" stroke="#494a42" stroke-width="3" d="M330 380h280M270 450h380M480 330l-20 210"/><path fill="#142c1a" d="M0 340h300v200H0z"/><text x="24" y="514" fill="#eee4d4" font-size="22" font-family="sans-serif">MOCK CAMERA</text></svg>');
     window.MOCK_HA = function () {
       return { updated: now(), doorbell: { last: arg("ring") ? t0 - 5 : t0 - 3600 },
-        train: { line: "5", stop: "Main St", next: 9.6, after: 29.6, leave_in: 2.6 },
+        train: { line: "5", stop: "Morris Park", times: [11, 19, 27], walk: 7, leave_now: false, next: 11, after: 19, leave_in: 4 },
         tiles: [
-          { kind: "lock", name: "Front door", value: "Locked", ok: true },
-          { kind: "unlock", name: "Back door", value: "Unlocked", ok: false, actions: [{ id: "lock_back", label: "Lock" }] },
+          { kind: "lock", name: "Doors", value: "Locked \u00b7 Apt locked", ok: true },
           { kind: "garage", name: "Garage", value: "Closed", ok: true },
           { kind: "temp", name: "Living room", value: "71° · AC off", actions: [{ id: "ac_on", label: "Turn on" },
             { id: "ac_down", label: "Cooler" }, { id: "ac_up", label: "Warmer" }] },
+          { kind: "light", name: "Lights", value: "On \u00b7 Glow on", actions: [{ id: "lights_off", label: "Turn off" }] },
           { kind: "bell", name: "Doorbell", value: "All Saints theme", actions: [{ id: "camera", label: "Show camera" }] }
         ] };
     };
@@ -72,6 +75,19 @@
     ["com.spotify.tv.android", "Spotify", "#121212"], ["com.google.android.youtube.tvmusic", "YouTube Music", "#141414"],
     ["tv.twitch.android.app", "Twitch", "#4b2a8c"], ["com.mediatek.wwtv.tvcenter", "Live TV", "#2a2a30"],
     ["com.android.vending", "App Store", "#2a2a30"], ["com.android.tv.settings", "Settings", "#2a2a30"]
+  ];
+  if (arg("ha")) apps = [
+    ["com.google.android.youtube.tv", "YouTube"], ["com.netflix.ninja", "Netflix"],
+    ["com.disney.disneyplus", "Disney+"], ["com.amazon.amazonvideo.livingroom", "Prime Video"],
+    ["com.apple.atve.androidtv.appletv", "Apple TV"], ["com.wbd.stream", "Max"],
+    ["com.fox.foxone", "Fox One"], ["com.hulu.livingroomplus", "Hulu"], ["com.instagram.airwave", "Instagram"],
+    ["com.ubnt.unifi.protect", "UniFi Protect"], ["com.cbs.ott", "Paramount+"], ["com.tubitv", "Tubi"],
+    ["com.google.android.youtube.tvunplugged", "YouTube TV"], ["com.google.android.youtube.tvmusic", "YouTube Music"],
+    ["com.nbcu.tve.telemundotv.androidtv", "Telemundo"], ["com.eliotcougar.tclcompanion", "TV Companion"],
+    ["com.shieldglow.tv", "Shield Glow"], ["com.tcl.dashboard", "Dashboard"], ["com.tcl.suspension", "TV Rest"],
+    ["com.tcl.tv", "Live TV"], ["com.tcl.ui_mediaCenter", "Media Center"],
+    ["de.cyberdream.androidtv.notifications.google", "Notifications"],
+    ["com.android.vending", "App Store"], ["com.android.tv.settings", "Settings"]
   ];
   var fresh = ["com.plexapp.android", "Plex", "#1f1f1f"];
   if (arg("newapp")) {
@@ -98,7 +114,7 @@
     { id: "m4", title: "Fisk", season: 3, episode: 1, app: app("abc-iview", "ABC iview", "au.net.abc.iview"), backdrop: jw("backdrop/301043232/s1440/fisk"), progress: 0.55 },
     { id: "m5", title: "Slow Horses", season: 4, episode: 3, app: app("apple-tv", "Apple TV", "com.apple.atve.androidtv.appletv"), backdrop: jw("backdrop/272750278/s1440/slow-horses"), progress: 0.3 }
   ];
-  var screens = [{ id: "desktop", name: "Desktop", kind: "moonlight", ready: true, note: "" }];
+  var screens = arg("ha") ? [] : [{ id: "desktop", name: "Desktop", kind: "moonlight", ready: true, note: "" }];
   var people = function () {
     return store.get("api.people") || cfg.people || [{ id: "person1", name: "Person 1" }, { id: "person2", name: "Person 2" }];
   };
@@ -110,6 +126,7 @@
     return new Promise(function (resolve, reject) {
       setTimeout(function () {
         if (down) return reject(new Error("The computer isn't answering."));
+        if (path.indexOf("/api/weather") === 0) return resolve({ temp: 58, text: "Cloudy", high: 61 });
         if (path.indexOf("/api/continue/open") === 0) return resolve({ ok: true, note: "" });
         if (path.indexOf("/api/continue") === 0) {
           var w = (path.match(/who=([^&]+)/) || [])[1];
