@@ -425,8 +425,13 @@ class MainActivity : Activity() {
                 "all" -> Intent(Settings.ACTION_SETTINGS)
                 else -> return false
             }
-            if (packageManager.resolveActivity(intent, 0) == null) return false
-            return start(intent)
+            // Only a screen we may open: some TV makers list settings screens that are not exported
+            // or need a system permission, and starting those would throw.
+            val ri = packageManager.queryIntentActivities(intent, 0).firstOrNull {
+                it.activityInfo.exported && it.activityInfo.permission == null
+            } ?: return false
+            intent.setClassName(ri.activityInfo.packageName, ri.activityInfo.name)
+            return start(intent, Intent(Settings.ACTION_SETTINGS))
         }
 
         @JavascriptInterface
@@ -504,12 +509,18 @@ class MainActivity : Activity() {
         return start(i)
     }
 
-    private fun start(i: Intent): Boolean = try {
+    // startActivity runs later on the main thread, so a refusal is caught there, never a crash
+    // that throws the TV back to a freshly started home; the fallback (if any) opens instead.
+    private fun start(i: Intent, fallback: Intent? = null): Boolean {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        main.post { startActivity(i) }
-        true
-    } catch (e: Exception) {
-        false
+        main.post {
+            try {
+                startActivity(i)
+            } catch (e: Exception) {
+                fallback?.let { f -> try { startActivity(f.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e2: Exception) {} }
+            }
+        }
+        return true
     }
 
     private fun bannerBytes(ri: ResolveInfo): ByteArray? {
